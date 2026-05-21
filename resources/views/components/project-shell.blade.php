@@ -1,0 +1,403 @@
+@props([
+    'project',
+    'bankAccounts' => collect(),
+    'collectionsChrono' => collect(),
+])
+
+@php
+    $statusLabels = [
+        'planning'    => 'Planning',
+        'active'      => 'Active',
+        'in_progress' => 'In progress',
+        'on-hold'     => 'On hold',
+        'completed'   => 'Completed',
+        'cancelled'   => 'Cancelled',
+    ];
+    $badgeClasses = [
+        'planning'    => 'bg-slate-100 text-slate-700',
+        'active'      => 'bg-blue-100 text-blue-800',
+        'in_progress' => 'bg-indigo-100 text-indigo-800',
+        'on-hold'     => 'bg-amber-100 text-amber-900',
+        'completed'   => 'bg-green-100 text-green-800',
+        'cancelled'   => 'bg-red-100 text-red-800',
+    ];
+    $statusLabel = $statusLabels[$project->status] ?? ucfirst($project->status);
+    $statusBadge = $badgeClasses[$project->status] ?? 'bg-gray-100 text-gray-700';
+
+    $totalCollected = $project->totalCollected();
+    $totalExpenses  = $project->totalExpenses();
+    $netPosition    = $project->netCashPosition();
+    $completionPct  = $project->contract_value > 0
+        ? min(100, round($totalCollected / $project->contract_value * 100, 1))
+        : 0;
+
+    $expenseCategories = ['materials', 'subcon', 'payroll', 'opex', 'other'];
+
+    $isExternal     = $project->isExternal();
+    $contractLabel  = $isExternal ? 'Contract' : 'Budget';
+    $percentLabel   = $isExternal ? '% Collected' : '% Used';
+    $contractValue  = (float) $project->contract_value;
+    $budgetUsedPct  = $contractValue > 0 ? min(100, round($totalExpenses / $contractValue * 100, 1)) : 0;
+
+    // In-house projects are loan-funded: "Inflow" reads as "Funding" everywhere.
+    $inflowLabel       = $isExternal ? 'Inflow' : 'Funding';
+    $totalInflowLabel  = $isExternal ? 'Total inflow' : 'Total funded';
+
+    $navLinks = $isExternal
+        ? [
+            ['label' => 'Overview',   'icon' => 'layout-dashboard', 'route' => 'projects.show.overview'],
+            ['label' => 'Allocation', 'icon' => 'bar-chart-2',      'route' => 'projects.show.allocation'],
+            ['label' => 'Inflow',     'icon' => 'arrow-down-circle','route' => 'projects.show.inflow'],
+            ['label' => 'Outflow',    'icon' => 'arrow-up-circle',  'route' => 'projects.show.outflow'],
+            ['label' => 'History',    'icon' => 'history',          'route' => 'projects.show.history'],
+        ]
+        : [
+            ['label' => 'Overview', 'icon' => 'layout-dashboard',  'route' => 'projects.show.overview'],
+            ['label' => 'Funding',  'icon' => 'banknote',          'route' => 'projects.show.inflow'],
+            ['label' => 'Outflow',  'icon' => 'arrow-up-circle',   'route' => 'projects.show.outflow'],
+            ['label' => 'Ledger',   'icon' => 'book-open',         'route' => 'projects.show.history'],
+        ];
+@endphp
+
+<div x-data="{
+    showNewCollection: false,
+    showNewExpense: false,
+    showEdit: {{ session('openEdit') ? 'true' : 'false' }}
+}" class="space-y-4">
+
+    {{-- Flash --}}
+    @if (session('success'))
+    <div class="rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">{{ session('success') }}</div>
+    @endif
+    @if ($errors->any())
+    <div class="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800">
+        <ul class="list-disc space-y-1 pl-5">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
+    </div>
+    @endif
+
+    {{-- Back to listing --}}
+    <a href="{{ route($isExternal ? 'projects.external' : 'projects.in_house') }}"
+       class="-mb-1 inline-flex w-fit shrink-0 items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-omet-navy">
+        <i data-lucide="arrow-left" class="h-3.5 w-3.5"></i>
+        {{ $isExternal ? 'External Projects' : 'In-house Projects' }}
+    </a>
+
+    {{-- Sticky header + action bar --}}
+    <div class="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-7 border-b border-gray-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur sm:px-6 lg:px-7">
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h1 class="truncate text-lg font-bold text-omet-navy">{{ $project->name }}</h1>
+                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold {{ $statusBadge }}">{{ $statusLabel }}</span>
+                    @if ($isExternal && $project->client_name)
+                    <span class="text-[12px] text-slate-500">· {{ $project->client_name }}</span>
+                    @elseif (! $isExternal && $project->location)
+                    <span class="text-[12px] text-slate-500">· {{ $project->location }}</span>
+                    @endif
+                    @if ($project->due_date)
+                    <span class="ml-1 inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 tabular-nums">
+                        <i data-lucide="flag" class="h-3 w-3"></i>
+                        Due {{ $project->due_date->format('M j, Y') }}
+                    </span>
+                    @endif
+                </div>
+            </div>
+
+            <div class="flex shrink-0 items-center gap-2">
+                <button type="button" @click="showNewCollection = true"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow ring-1 ring-emerald-700/20 hover:bg-emerald-700">
+                    <i data-lucide="plus-circle" class="h-3.5 w-3.5"></i> {{ $inflowLabel }}
+                </button>
+                <button type="button" @click="showNewExpense = true"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow ring-1 ring-red-700/20 hover:bg-red-700">
+                    <i data-lucide="minus-circle" class="h-3.5 w-3.5"></i> Outflow
+                </button>
+                <button type="button" @click="showEdit = true"
+                    class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:border-omet-blue hover:text-omet-blue">
+                    <i data-lucide="pencil" class="h-3 w-3"></i> Edit
+                </button>
+                <a href="{{ route('projects.exportWorkbook', ['project' => $project]) }}"
+                    class="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:border-omet-blue hover:text-omet-blue">
+                    <i data-lucide="file-spreadsheet" class="h-3.5 w-3.5"></i> Export
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {{-- KPI strip --}}
+    <div class="grid grid-cols-2 gap-2 lg:grid-cols-5">
+        <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ $contractLabel }}</p>
+            <p class="mt-0.5 text-sm font-bold tabular-nums text-omet-navy">
+                @if ($contractValue > 0) ₱{{ number_format($contractValue, 2) }} @else — @endif
+            </p>
+        </div>
+        <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ $totalInflowLabel }}</p>
+            <p class="mt-0.5 text-sm font-bold tabular-nums text-green-700">₱{{ number_format($totalCollected, 2) }}</p>
+        </div>
+        <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Total outflow</p>
+            <p class="mt-0.5 text-sm font-bold tabular-nums text-red-600">₱{{ number_format($totalExpenses, 2) }}</p>
+        </div>
+        <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Net cash</p>
+            <p class="mt-0.5 text-sm font-bold tabular-nums {{ $netPosition >= 0 ? 'text-omet-navy' : 'text-red-600' }}">₱{{ number_format($netPosition, 2) }}</p>
+        </div>
+        <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
+            <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ $percentLabel }}</p>
+            <p class="mt-0.5 text-sm font-bold tabular-nums text-indigo-600">
+                @if ($contractValue > 0)
+                    {{ $isExternal ? $completionPct : $budgetUsedPct }}%
+                @else
+                    —
+                @endif
+            </p>
+        </div>
+    </div>
+
+    {{-- Secondary nav (flat, matches accounts toolbar pattern) --}}
+    <nav class="flex shrink-0 overflow-x-auto border-b border-gray-200">
+        @foreach ($navLinks as $link)
+            @php $active = request()->routeIs($link['route']); @endphp
+            <a href="{{ route($link['route'], $project) }}"
+                @class([
+                    '-mb-px flex items-center gap-2 whitespace-nowrap px-4 py-2.5 text-sm transition-colors duration-150',
+                    'border-b-2 border-omet-blue text-omet-blue font-semibold bg-blue-50/40' => $active,
+                    'border-b-2 border-transparent text-gray-500 hover:text-omet-navy hover:border-gray-300' => ! $active,
+                ])>
+                <i data-lucide="{{ $link['icon'] }}" class="h-4 w-4"></i>
+                {{ $link['label'] }}
+            </a>
+        @endforeach
+    </nav>
+
+    {{-- Sub-page content (table or panel) --}}
+    <div>
+        {{ $slot }}
+    </div>
+
+    {{-- ════════════════════════════════════════════════════════════
+         RECORD INFLOW MODAL
+    ════════════════════════════════════════════════════════════ --}}
+    <div x-show="showNewCollection" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+         @keydown.escape.window="showNewCollection = false">
+        <div @click.outside="showNewCollection = false"
+             class="w-full max-w-md rounded-2xl bg-white shadow-xl">
+            <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                <h3 class="text-base font-semibold text-omet-navy">{{ $isExternal ? 'Record inflow / collection' : 'Record funding (loan disbursement)' }}</h3>
+                <button @click="showNewCollection = false" class="rounded p-1 text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x" class="h-4 w-4"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ route('projects.collections.store', $project) }}" class="space-y-4 px-6 py-5">
+                @csrf
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <x-label for="c_date" :value="__('Date received *')" />
+                        <x-input id="c_date" type="date" name="collected_on" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('collected_on', now()->toDateString())" required />
+                    </div>
+                    <div>
+                        <x-label for="c_amount" :value="__('Amount (PHP) *')" />
+                        <x-input id="c_amount" type="number" name="amount" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('amount')" min="0.01" step="0.01" required />
+                    </div>
+                    <div>
+                        <x-label for="c_ref" :value="__($isExternal ? 'Reference / OR no.' : 'Loan reference')" />
+                        <x-input id="c_ref" type="text" name="reference" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('reference')" placeholder="{{ $isExternal ? 'e.g. OR-1234' : 'e.g. BPI-LOAN-2026-001' }}" />
+                    </div>
+                    <div>
+                        <x-label for="c_bank" :value="__($isExternal ? 'Deposited to' : 'Disbursed to account')" />
+                        <select id="c_bank" name="bank_account_id"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
+                            <option value="">— {{ $isExternal ? 'none / not yet deposited' : 'select account' }} —</option>
+                            @foreach ($bankAccounts as $ba)
+                                <option value="{{ $ba->id }}" {{ old('bank_account_id') == $ba->id ? 'selected' : '' }}>
+                                    {{ $ba->name }} ({{ $ba->entity->name ?? '?' }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="c_notes" :value="__($isExternal ? 'Notes' : 'Lender / notes')" />
+                        <textarea id="c_notes" name="notes" rows="2"
+                            placeholder="{{ $isExternal ? '' : 'e.g. BPI · 5yr term · 8.25% p.a.' }}"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">{{ old('notes') }}</textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" @click="showNewCollection = false"
+                        class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+                    <button type="submit"
+                        class="rounded-lg bg-omet-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-omet-lightblue">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- ════════════════════════════════════════════════════════════
+         RECORD OUTFLOW MODAL
+    ════════════════════════════════════════════════════════════ --}}
+    <div x-show="showNewExpense" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+         @keydown.escape.window="showNewExpense = false">
+        <div @click.outside="showNewExpense = false"
+             class="w-full max-w-lg rounded-2xl bg-white shadow-xl">
+            <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                <h3 class="text-base font-semibold text-omet-navy">Record outflow</h3>
+                <button @click="showNewExpense = false" class="rounded p-1 text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x" class="h-4 w-4"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ route('projects.expenses.store', $project) }}" class="space-y-4 px-6 py-5">
+                @csrf
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <x-label for="e_date" :value="__('Date *')" />
+                        <x-input id="e_date" type="date" name="spent_on" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('spent_on', now()->toDateString())" required />
+                    </div>
+                    <div>
+                        <x-label for="e_amount" :value="__('Amount (PHP) *')" />
+                        <x-input id="e_amount" type="number" name="amount" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('amount')" min="0.01" step="0.01" required />
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="e_desc" :value="__('Description')" />
+                        <x-input id="e_desc" type="text" name="description" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('description')" placeholder="Describe this outflow" />
+                    </div>
+                    <div>
+                        <x-label for="e_cat" :value="__('Category')" />
+                        <select id="e_cat" name="category"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
+                            <option value="">— select —</option>
+                            @foreach ($expenseCategories as $cat)
+                                <option value="{{ $cat }}" {{ old('category') === $cat ? 'selected' : '' }}>{{ ucfirst($cat) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <x-label for="e_vendor" :value="__('Vendor / PO ref')" />
+                        <x-input id="e_vendor" type="text" name="vendor_ref" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('vendor_ref')" />
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="e_bank" :value="__('Paid from account')" />
+                        <select id="e_bank" name="bank_account_id"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
+                            <option value="">— none / cash —</option>
+                            @foreach ($bankAccounts as $ba)
+                                <option value="{{ $ba->id }}" {{ old('bank_account_id') == $ba->id ? 'selected' : '' }}>
+                                    {{ $ba->name }} ({{ $ba->entity->name ?? '?' }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="e_notes" :value="__('Notes')" />
+                        <textarea id="e_notes" name="notes" rows="2"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">{{ old('notes') }}</textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" @click="showNewExpense = false"
+                        class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+                    <button type="submit"
+                        class="rounded-lg bg-omet-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-omet-lightblue">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {{-- ════════════════════════════════════════════════════════════
+         EDIT PROJECT MODAL
+    ════════════════════════════════════════════════════════════ --}}
+    <div x-show="showEdit" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+         @keydown.escape.window="showEdit = false">
+        <div @click.outside="showEdit = false"
+             class="w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl"
+             style="max-height:90vh">
+            <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+                <h3 class="text-base font-semibold text-omet-navy">Edit project</h3>
+                <button @click="showEdit = false" class="rounded p-1 text-gray-400 hover:text-gray-600">
+                    <i data-lucide="x" class="h-4 w-4"></i>
+                </button>
+            </div>
+            <form method="POST" action="{{ route('projects.update', $project) }}" class="space-y-4 px-6 py-5">
+                @csrf
+                @method('PUT')
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <x-label for="ep_name" :value="__('Project name *')" />
+                        <x-input id="ep_name" type="text" name="name" class="mt-1 block w-full rounded-lg border-gray-300 text-sm"
+                            value="{{ old('name', $project->name) }}" required />
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="ep_status" :value="__('Status')" />
+                        <select id="ep_status" name="status"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
+                            @php $sel = old('status', $project->status); @endphp
+                            @foreach ($statusLabels as $val => $lbl)
+                                <option value="{{ $val }}" {{ $sel === $val ? 'selected' : '' }}>{{ $lbl }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    @if ($isExternal)
+                    <div>
+                        <x-label for="ep_client" :value="__('Client name')" />
+                        <x-input id="ep_client" type="text" name="client_name" class="mt-1 block w-full rounded-lg border-gray-300 text-sm"
+                            value="{{ old('client_name', $project->client_name) }}" />
+                    </div>
+                    <div>
+                        <x-label for="ep_location" :value="__('Location')" />
+                        <x-input id="ep_location" type="text" name="location" class="mt-1 block w-full rounded-lg border-gray-300 text-sm"
+                            value="{{ old('location', $project->location) }}" />
+                    </div>
+                    @else
+                    <div class="col-span-2">
+                        <x-label for="ep_location" :value="__('Location')" />
+                        <x-input id="ep_location" type="text" name="location" class="mt-1 block w-full rounded-lg border-gray-300 text-sm"
+                            value="{{ old('location', $project->location) }}" />
+                    </div>
+                    @endif
+                    <div class="col-span-2">
+                        <x-label for="ep_cv" :value="__($isExternal ? 'Contract value (PHP)' : 'Budget (PHP) — optional')" />
+                        <div class="relative mt-1">
+                            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-gray-400">₱</span>
+                            <x-input id="ep_cv" type="number" name="contract_value" class="block w-full rounded-lg border-gray-300 pl-7 text-sm"
+                                value="{{ old('contract_value', (float) $project->contract_value) }}" min="0" step="0.01" />
+                        </div>
+                        @unless ($isExternal)
+                        <p class="mt-1 text-xs text-gray-400">Set a budget to track utilization; leave blank to just record spending.</p>
+                        @endunless
+                    </div>
+                    <div>
+                        <x-label for="ep_start" :value="__('Start date')" />
+                        <x-input id="ep_start" type="date" name="start_date" class="mt-1 block w-full rounded-lg border-gray-300 text-sm"
+                            value="{{ old('start_date', $project->start_date?->toDateString()) }}" />
+                    </div>
+                    <div>
+                        <x-label for="ep_end" :value="__('End date')" />
+                        <x-input id="ep_end" type="date" name="end_date" class="mt-1 block w-full rounded-lg border-gray-300 text-sm"
+                            value="{{ old('end_date', $project->end_date?->toDateString()) }}" />
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="ep_due" :value="__('Due date')" />
+                        <x-input id="ep_due" type="date" name="due_date" class="mt-1 block w-full rounded-lg border-gray-300 text-sm"
+                            value="{{ old('due_date', $project->due_date?->toDateString()) }}" />
+                        <p class="mt-1 text-xs text-gray-400">Target delivery date — can differ from end date.</p>
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" @click="showEdit = false"
+                        class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                        class="rounded-lg bg-omet-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-omet-lightblue">
+                        Save changes
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
