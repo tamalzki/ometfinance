@@ -26,10 +26,10 @@
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                     </svg>
-                    One-time admin setup
+                    One-time account setup
                 </span>
                 <h2 class="mt-4 text-[34px] font-semibold leading-[1.1] tracking-tight text-white xl:text-[40px]">
-                    Finish setting up your <span class="text-[#60A5FA]">administrator</span> account.
+                    Finish setting up your <span class="text-[#60A5FA]">{{ $invite->role === 'cfo' ? 'CFO' : 'administrator' }}</span> account.
                 </h2>
                 <p class="mt-4 text-[14px] leading-relaxed text-slate-400">
                     This invite was issued from the OMET CLI and is tied to a single email.
@@ -111,7 +111,7 @@
                 >
 
                     <div class="mb-5">
-                        <h1 class="text-[18px] font-semibold tracking-tight text-slate-900">Set up your admin account</h1>
+                        <h1 class="text-[18px] font-semibold tracking-tight text-slate-900">Set up your {{ $invite->role === 'cfo' ? 'CFO' : 'admin' }} account</h1>
                         <p class="mt-1 text-[13px] text-slate-500">
                             Inviting <span class="font-medium text-slate-700">{{ $invite->email }}</span>
                         </p>
@@ -220,7 +220,7 @@
                             :disabled="expired"
                             class="mt-2 flex h-[42px] w-full items-center justify-center rounded-lg bg-[#0B1726] text-[13.5px] font-semibold text-white shadow-sm transition hover:bg-[#152439] focus:outline-none focus:ring-4 focus:ring-[#3B82F6]/20 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <span x-show="!expired">Create admin account</span>
+                            <span x-show="!expired">Create {{ $invite->role === 'cfo' ? 'CFO' : 'admin' }} account</span>
                             <span x-show="expired" x-cloak>Invite expired</span>
                         </button>
                     </form>

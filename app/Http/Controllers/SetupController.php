@@ -43,6 +43,7 @@ class SetupController extends Controller
             $user = User::create([
                 'name'     => $data['name'],
                 'email'    => $invite->email,
+                'role'     => $invite->role ?? 'admin',
                 'password' => Hash::make($data['password']),
             ]);
 

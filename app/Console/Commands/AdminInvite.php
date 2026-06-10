@@ -10,20 +10,23 @@ use Illuminate\Support\Str;
 
 class AdminInvite extends Command
 {
-    protected $signature = 'admin:invite {email : Email address of the admin to invite}';
+    protected $signature = 'admin:invite {email : Email address of the user to invite} {--role=admin : Role to assign (admin or cfo)}';
 
-    protected $description = 'Generate a one-time setup invite link for a new admin user';
+    protected $description = 'Generate a one-time setup invite link for a new user';
 
     public function handle(): int
     {
         $email = (string) $this->argument('email');
+        $role  = (string) $this->option('role');
 
         $validator = Validator::make(
-            ['email' => $email],
-            ['email' => ['required', 'email:rfc']]
+            ['email' => $email, 'role' => $role],
+            ['email' => ['required', 'email:rfc'], 'role' => ['required', 'in:admin,cfo']]
         );
         if ($validator->fails()) {
-            $this->error('Invalid email address: ' . $email);
+            foreach ($validator->errors()->all() as $message) {
+                $this->error($message);
+            }
             return self::INVALID;
         }
 
@@ -32,6 +35,7 @@ class AdminInvite extends Command
 
         DB::table('admin_invites')->insert([
             'email'      => $email,
+            'role'       => $role,
             'token'      => $token,
             'expires_at' => $now->copy()->addHours(24),
             'used'       => false,
@@ -41,6 +45,7 @@ class AdminInvite extends Command
 
         $base = rtrim((string) config('app.url'), '/');
         $this->line('Setup URL: ' . $base . '/setup?token=' . $token);
+        $this->line('Role: ' . $role);
         $this->line('Valid for 24 hours.');
 
         return self::SUCCESS;
