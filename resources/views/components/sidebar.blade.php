@@ -26,6 +26,13 @@
             ],
         ],
         [
+            'label' => 'Disbursements',
+            'links' => [
+                ['name' => 'Daily Transactions', 'route' => 'vouchers.index', 'icon' => 'receipt', 'pattern' => 'vouchers.index'],
+                ['name' => 'Payables',  'route' => 'vouchers.payables', 'icon' => 'alarm-clock', 'pattern' => 'vouchers.payables'],
+            ],
+        ],
+        [
             'label' => 'Insights',
             'links' => [
                 ['name' => 'Reports', 'route' => 'reports', 'icon' => 'bar-chart-3'],
@@ -45,11 +52,23 @@
 
     $user        = auth()->user();
     $userInitial = strtoupper(substr($user->name ?? 'U', 0, 1));
+
+    // CFO sees Dashboard, Projects, Disbursements, and Reports — not Accounts or Transfers.
+    if ($user->isCfo()) {
+        // Keep only Dashboard from Workspace (remove Accounts)
+        $sections[0]['links'] = array_values(
+            array_filter($sections[0]['links'], fn ($l) => $l['route'] === 'dashboard')
+        );
+        // Remove Cash Movement / Transfers (index 2) — Projects (index 1) stays
+        $sections = array_values(
+            array_filter($sections, fn ($s, $i) => $i !== 2, ARRAY_FILTER_USE_BOTH)
+        );
+    }
 @endphp
 
 <aside
-    :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
-    class="fixed inset-y-0 left-0 z-40 flex h-screen w-64 transform flex-col border-r border-white/5 bg-[#0B1726] transition duration-200 ease-in-out lg:translate-x-0"
+    :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'"
+    class="fixed inset-y-0 left-0 z-40 flex h-screen w-64 flex-col border-r border-white/5 bg-[#0B1726] transition-transform duration-200 ease-in-out lg:translate-x-0 lg:transition-none"
 >
     {{-- Brand --}}
     <div class="flex items-center gap-3 px-5 pb-5 pt-6">
@@ -65,7 +84,7 @@
     <div class="mx-5 h-px bg-white/10"></div>
 
     {{-- Nav --}}
-    <nav class="flex-1 overflow-y-auto px-3 py-4">
+    <nav class="flex-1 overflow-y-auto px-3 py-4" @click="if (window.innerWidth < 1024) sidebarOpen = false">
         @foreach ($sections as $sectionIndex => $section)
             @php
                 $isGroup = isset($section['group']);
@@ -109,7 +128,7 @@
                            :class="open ? 'rotate-0' : '-rotate-90'"></i>
                     </button>
 
-                    <div x-show="open" x-cloak class="space-y-0.5">
+                    <div class="space-y-0.5" :class="{ 'hidden': !open }">
                         @foreach ($section['links'] as $link)
                             @php $active = $isLinkActive($link); @endphp
                             <a href="{{ route($link['route']) }}"
@@ -175,7 +194,9 @@
             </span>
             <div class="min-w-0 flex-1 leading-tight">
                 <p class="truncate text-[12.5px] font-semibold text-white">{{ $user->name }}</p>
-                <p class="truncate text-[11px] text-slate-400">{{ $user->email }}</p>
+                <p class="truncate text-[11px] text-slate-400">
+                    {{ $user->isCfo() ? 'CFO' : 'Admin' }} · {{ $user->email }}
+                </p>
             </div>
             <form method="POST" action="{{ route('logout') }}" class="shrink-0">
                 @csrf

@@ -7,7 +7,7 @@
 
         @if ($project->expenses->isEmpty())
             <div class="px-4 py-10 text-center">
-                <p class="text-sm text-gray-500">No outflows yet. Use the red <strong>Outflow</strong> button above to record one.</p>
+                <p class="text-sm text-gray-500">No outflows yet. Use the red <strong>Outflow</strong> button above to create a voucher in Daily Transactions — every outflow must have a voucher.</p>
             </div>
         @else
         <div class="data-grid overflow-x-auto">

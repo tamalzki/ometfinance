@@ -11,7 +11,7 @@ class ProjectExpense extends Model
     use Auditable;
 
     protected $fillable = [
-        'project_id', 'bank_account_id', 'transfer_id', 'spent_on',
+        'project_id', 'bank_account_id', 'transfer_id', 'voucher_id', 'spent_on',
         'amount', 'description', 'vendor_ref', 'category', 'notes',
     ];
 
@@ -37,8 +37,18 @@ class ProjectExpense extends Model
         return $this->belongsTo(Transfer::class);
     }
 
+    public function voucher(): BelongsTo
+    {
+        return $this->belongsTo(Voucher::class);
+    }
+
     public function isFromTransfer(): bool
     {
         return $this->transfer_id !== null;
+    }
+
+    public function isFromVoucher(): bool
+    {
+        return $this->voucher_id !== null;
     }
 }

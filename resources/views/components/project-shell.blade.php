@@ -31,8 +31,6 @@
         ? min(100, round($totalCollected / $project->contract_value * 100, 1))
         : 0;
 
-    $expenseCategories = ['materials', 'subcon', 'payroll', 'opex', 'other'];
-
     $isExternal     = $project->isExternal();
     $contractLabel  = $isExternal ? 'Contract' : 'Budget';
     $percentLabel   = $isExternal ? '% Collected' : '% Used';
@@ -61,7 +59,6 @@
 
 <div x-data="{
     showNewCollection: false,
-    showNewExpense: false,
     showEdit: {{ session('openEdit') ? 'true' : 'false' }}
 }" class="space-y-4">
 
@@ -108,10 +105,10 @@
                     class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow ring-1 ring-emerald-700/20 hover:bg-emerald-700">
                     <i data-lucide="plus-circle" class="h-3.5 w-3.5"></i> {{ $inflowLabel }}
                 </button>
-                <button type="button" @click="showNewExpense = true"
+                <a href="{{ route('vouchers.index', ['project_id' => $project->id, 'new_voucher' => 1]) }}"
                     class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow ring-1 ring-red-700/20 hover:bg-red-700">
                     <i data-lucide="minus-circle" class="h-3.5 w-3.5"></i> Outflow
-                </button>
+                </a>
                 <button type="button" @click="showEdit = true"
                     class="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-600 hover:border-omet-blue hover:text-omet-blue">
                     <i data-lucide="pencil" class="h-3 w-3"></i> Edit
@@ -235,76 +232,6 @@
         </div>
     </div>
 
-    {{-- ════════════════════════════════════════════════════════════
-         RECORD OUTFLOW MODAL
-    ════════════════════════════════════════════════════════════ --}}
-    <div x-show="showNewExpense" x-cloak
-         class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-         @keydown.escape.window="showNewExpense = false">
-        <div @click.outside="showNewExpense = false"
-             class="w-full max-w-lg rounded-2xl bg-white shadow-xl">
-            <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <h3 class="text-base font-semibold text-omet-navy">Record outflow</h3>
-                <button @click="showNewExpense = false" class="rounded p-1 text-gray-400 hover:text-gray-600">
-                    <i data-lucide="x" class="h-4 w-4"></i>
-                </button>
-            </div>
-            <form method="POST" action="{{ route('projects.expenses.store', $project) }}" class="space-y-4 px-6 py-5">
-                @csrf
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <x-label for="e_date" :value="__('Date *')" />
-                        <x-input id="e_date" type="date" name="spent_on" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('spent_on', now()->toDateString())" required />
-                    </div>
-                    <div>
-                        <x-label for="e_amount" :value="__('Amount (PHP) *')" />
-                        <x-input id="e_amount" type="number" name="amount" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('amount')" min="0.01" step="0.01" required />
-                    </div>
-                    <div class="col-span-2">
-                        <x-label for="e_desc" :value="__('Description')" />
-                        <x-input id="e_desc" type="text" name="description" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('description')" placeholder="Describe this outflow" />
-                    </div>
-                    <div>
-                        <x-label for="e_cat" :value="__('Category')" />
-                        <select id="e_cat" name="category"
-                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
-                            <option value="">— select —</option>
-                            @foreach ($expenseCategories as $cat)
-                                <option value="{{ $cat }}" {{ old('category') === $cat ? 'selected' : '' }}>{{ ucfirst($cat) }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <x-label for="e_vendor" :value="__('Vendor / PO ref')" />
-                        <x-input id="e_vendor" type="text" name="vendor_ref" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('vendor_ref')" />
-                    </div>
-                    <div class="col-span-2">
-                        <x-label for="e_bank" :value="__('Paid from account')" />
-                        <select id="e_bank" name="bank_account_id"
-                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
-                            <option value="">— none / cash —</option>
-                            @foreach ($bankAccounts as $ba)
-                                <option value="{{ $ba->id }}" {{ old('bank_account_id') == $ba->id ? 'selected' : '' }}>
-                                    {{ $ba->name }} ({{ $ba->entity->name ?? '?' }})
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div class="col-span-2">
-                        <x-label for="e_notes" :value="__('Notes')" />
-                        <textarea id="e_notes" name="notes" rows="2"
-                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">{{ old('notes') }}</textarea>
-                    </div>
-                </div>
-                <div class="flex justify-end gap-2 pt-1">
-                    <button type="button" @click="showNewExpense = false"
-                        class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
-                    <button type="submit"
-                        class="rounded-lg bg-omet-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-omet-lightblue">Save</button>
-                </div>
-            </form>
-        </div>
-    </div>
 
     {{-- ════════════════════════════════════════════════════════════
          EDIT PROJECT MODAL

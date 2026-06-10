@@ -15,16 +15,20 @@
 
         @include('partials.mix-stylesheet')
         <script src="{{ mix('js/app.js') }}" defer></script>
-        <style>[x-cloak]{display:none!important}</style>
+        <style>
+            [x-cloak]{display:none!important}
+            main{scrollbar-gutter:stable}
+        </style>
     </head>
     <body class="font-sans antialiased text-slate-700" x-data="{ sidebarOpen: false }">
-        <div class="min-h-screen bg-slate-50 lg:flex">
+        <div class="h-screen overflow-hidden bg-slate-50 lg:flex">
             <x-sidebar />
+            <script>if (typeof lucide !== 'undefined') { lucide.createIcons(); }</script>
 
-            <div class="flex min-h-screen flex-1 flex-col lg:ml-64">
+            <div class="flex h-screen min-h-0 min-w-0 flex-1 flex-col lg:ml-64">
                 <x-header :title="$pageTitle ?? 'Dashboard'" />
 
-                <main class="flex min-h-0 flex-1 flex-col p-4 sm:p-6 lg:p-7">
+                <main class="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto p-4 sm:p-6 lg:p-7">
                     {{ $slot }}
                 </main>
             </div>

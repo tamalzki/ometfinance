@@ -8,8 +8,258 @@
         if ($abs >= 1_000)     return '₱' . number_format($v / 1_000, 1) . 'K';
         return '₱' . number_format($v, 0);
     };
+    $isCfo = auth()->user()->isCfo();
 @endphp
 
+@if ($isCfo)
+{{-- ══════════════════════════════════════════════════════════════════════ --}}
+{{-- CFO DASHBOARD — disbursements-focused view                           --}}
+{{-- ══════════════════════════════════════════════════════════════════════ --}}
+<div class="flex flex-col gap-5">
+
+    {{-- Heading --}}
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <h1 class="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">Disbursements overview</h1>
+            <p class="mt-0.5 text-sm text-slate-500">Live payables status and recent disbursement activity.</p>
+        </div>
+        <p class="text-xs font-medium text-slate-500">As of {{ now()->format('M d, Y · g:i A') }}</p>
+    </div>
+
+    {{-- KPI cards --}}
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+
+        {{-- Outstanding payables --}}
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Outstanding payables</p>
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <i data-lucide="file-text" class="h-4 w-4"></i>
+                </span>
+            </div>
+            <p class="mt-3 text-2xl font-bold tabular-nums tracking-tight text-slate-900">{{ $peso($payables['outstanding']) }}</p>
+            <p class="mt-1 text-[11.5px] text-slate-500">Total unpaid balance</p>
+        </div>
+
+        {{-- Overdue --}}
+        @php $hasOverdue = $insights['payables_overdue'] > 0; @endphp
+        <div class="rounded-xl border {{ $hasOverdue ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white' }} p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-wider {{ $hasOverdue ? 'text-rose-600' : 'text-slate-500' }}">Overdue</p>
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg {{ $hasOverdue ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500' }}">
+                    <i data-lucide="alarm-clock" class="h-4 w-4"></i>
+                </span>
+            </div>
+            <p class="mt-3 text-2xl font-bold tabular-nums tracking-tight {{ $hasOverdue ? 'text-rose-700' : 'text-slate-900' }}">
+                {{ $insights['payables_overdue'] }}
+                <span class="text-base font-medium">voucher{{ $insights['payables_overdue'] !== 1 ? 's' : '' }}</span>
+            </p>
+            <p class="mt-1 text-[11.5px] {{ $hasOverdue ? 'text-rose-600' : 'text-slate-500' }}">
+                {{ $hasOverdue ? $peso($payables['overdue_amt']) . ' past due' : 'No overdue payables' }}
+            </p>
+        </div>
+
+        {{-- Due in 7 days --}}
+        @php $hasDue7 = $insights['payables_due_7d'] > 0; @endphp
+        <div class="rounded-xl border {{ $hasDue7 ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white' }} p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-wider {{ $hasDue7 ? 'text-amber-700' : 'text-slate-500' }}">Due in 7 days</p>
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg {{ $hasDue7 ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500' }}">
+                    <i data-lucide="hourglass" class="h-4 w-4"></i>
+                </span>
+            </div>
+            <p class="mt-3 text-2xl font-bold tabular-nums tracking-tight {{ $hasDue7 ? 'text-amber-800' : 'text-slate-900' }}">
+                {{ $insights['payables_due_7d'] }}
+                <span class="text-base font-medium">voucher{{ $insights['payables_due_7d'] !== 1 ? 's' : '' }}</span>
+            </p>
+            <p class="mt-1 text-[11.5px] {{ $hasDue7 ? 'text-amber-700' : 'text-slate-500' }}">
+                {{ $hasDue7 ? $peso($payables['due_7d_amt']) . ' coming due' : 'Nothing due soon' }}
+            </p>
+        </div>
+
+        {{-- Paid out this month --}}
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Paid out — {{ $monthSummary['label'] }}
+                </p>
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-50 text-rose-600">
+                    <i data-lucide="send" class="h-4 w-4"></i>
+                </span>
+            </div>
+            <p class="mt-3 text-2xl font-bold tabular-nums tracking-tight text-slate-900">{{ $peso($monthSummary['out']) }}</p>
+            <p class="mt-1 text-[11.5px] text-slate-500">Total disbursements this month</p>
+        </div>
+    </div>
+
+    {{-- Needs attention + Quick reports --}}
+    @php
+        $payablesHasInsights = ($insights['payables_overdue'] + $insights['payables_due_7d']) > 0;
+    @endphp
+    <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
+
+        {{-- Payables alerts --}}
+        <div class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+            <span class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Needs attention</span>
+
+            @if ($insights['payables_overdue'] > 0)
+            <a href="{{ route('vouchers.payables', ['bucket' => 'd1_30']) }}"
+               class="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-100 transition hover:bg-rose-100">
+                <i data-lucide="alarm-clock" class="h-3 w-3"></i>
+                {{ $insights['payables_overdue'] }} payables overdue · {{ $pesoShort($payables['overdue_amt']) }}
+            </a>
+            @endif
+
+            @if ($insights['payables_due_7d'] > 0)
+            <a href="{{ route('vouchers.payables') }}"
+               class="inline-flex items-center gap-1 rounded-md bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-800 ring-1 ring-orange-100 transition hover:bg-orange-100">
+                <i data-lucide="hourglass" class="h-3 w-3"></i>
+                {{ $insights['payables_due_7d'] }} due in 7 days · {{ $pesoShort($payables['due_7d_amt']) }}
+            </a>
+            @endif
+
+            @unless ($payablesHasInsights)
+            <span class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700">
+                <i data-lucide="check-circle-2" class="h-3 w-3"></i>
+                All payables look healthy
+            </span>
+            @endunless
+        </div>
+
+        {{-- Quick reports (CFO-accessible only) --}}
+        <div class="rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
+            <p class="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Quick reports</p>
+            <div class="flex flex-wrap gap-1.5">
+                <a href="{{ route('reports') }}"
+                   class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-omet-blue hover:text-omet-blue">
+                    <i data-lucide="gauge" class="h-3 w-3"></i> Overall
+                </a>
+                <a href="{{ route('reports.cashOutflow') }}"
+                   class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-omet-blue hover:text-omet-blue">
+                    <i data-lucide="arrow-up-circle" class="h-3 w-3"></i> Outflow
+                </a>
+                <a href="{{ route('reports.payables') }}"
+                   class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-omet-blue hover:text-omet-blue">
+                    <i data-lucide="alarm-clock" class="h-3 w-3"></i> Payables
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {{-- Monthly disbursements chart + System activity --}}
+    <div class="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+
+        {{-- Monthly cash outflow chart --}}
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
+                <div>
+                    <h3 class="text-base font-semibold text-slate-900">Monthly disbursements</h3>
+                    <p class="mt-0.5 text-xs text-slate-500">Cash paid out vs collected — last 6 months.</p>
+                </div>
+                <div class="flex items-center gap-4 text-[11px] text-slate-500">
+                    <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-emerald-500"></span> Inflow</span>
+                    <span class="flex items-center gap-1.5"><span class="h-2 w-2 rounded-sm bg-rose-500"></span> Outflow</span>
+                </div>
+            </div>
+            <div class="relative h-[260px]">
+                <canvas id="cashFlowChart"></canvas>
+            </div>
+        </div>
+
+        {{-- System activity audit log --}}
+        <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div class="mb-3 flex items-end justify-between">
+                <div>
+                    <h3 class="text-base font-semibold text-slate-900">Recent activity</h3>
+                    <p class="mt-0.5 text-xs text-slate-500">Latest voucher changes.</p>
+                </div>
+                <span class="inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    <i data-lucide="shield-check" class="h-3 w-3"></i> Audited
+                </span>
+            </div>
+
+            @if ($recentAudit->isEmpty())
+                <p class="rounded-md border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-500">
+                    No activity recorded yet.
+                </p>
+            @else
+                <ul class="divide-y divide-slate-100">
+                    @foreach ($recentAudit as $a)
+                        @php
+                            $eventColor = match ($a->event) {
+                                'created' => 'bg-emerald-50 text-emerald-600',
+                                'updated' => 'bg-blue-50 text-blue-600',
+                                'deleted' => 'bg-rose-50 text-rose-600',
+                                default   => 'bg-slate-100 text-slate-500',
+                            };
+                            $eventIcon = match ($a->event) {
+                                'created' => 'plus-circle',
+                                'updated' => 'edit-3',
+                                'deleted' => 'trash-2',
+                                default   => 'circle',
+                            };
+                        @endphp
+                        <li class="flex items-start gap-3 py-2.5">
+                            <span class="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md {{ $eventColor }}">
+                                <i data-lucide="{{ $eventIcon }}" class="h-3.5 w-3.5"></i>
+                            </span>
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate text-[13px] text-slate-800">
+                                    <span class="capitalize font-medium">{{ $a->event }}</span>
+                                    <span class="text-slate-400"> · </span>
+                                    {{ class_basename($a->auditable_type) }} #{{ $a->auditable_id }}
+                                </p>
+                                <p class="mt-0.5 truncate text-[11px] text-slate-500">
+                                    {{ $a->user?->name ?? 'System' }} · {{ $a->created_at?->diffForHumans() }}
+                                </p>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </div>
+    </div>
+
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const ctx = document.getElementById('cashFlowChart');
+        if (!ctx || typeof Chart === 'undefined') return;
+        const labels = @json(array_column($monthlyFlow, 'label'));
+        const inflow  = @json(array_column($monthlyFlow, 'in'));
+        const outflow = @json(array_column($monthlyFlow, 'out'));
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Inflow',  data: inflow,  backgroundColor: '#10b981', borderRadius: 4, maxBarThickness: 28 },
+                    { label: 'Outflow', data: outflow, backgroundColor: '#ef4444', borderRadius: 4, maxBarThickness: 28 },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: function (ctx) {
+                    return ctx.dataset.label + ': ₱' + (ctx.parsed.y || 0).toLocaleString(undefined, { minimumFractionDigits: 2 });
+                }}}},
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 11 } } },
+                    y: { grid: { color: '#f1f5f9' }, border: { display: false }, ticks: { color: '#64748b', font: { size: 11 }, callback: function (v) {
+                        if (Math.abs(v) >= 1_000_000) return '₱' + (v / 1_000_000).toFixed(1) + 'M';
+                        if (Math.abs(v) >= 1_000) return '₱' + (v / 1_000).toFixed(0) + 'K';
+                        return '₱' + v;
+                    }}},
+                },
+            },
+        });
+    });
+</script>
+
+@else
+{{-- ══════════════════════════════════════════════════════════════════════ --}}
+{{-- ADMIN DASHBOARD — full finance overview                              --}}
+{{-- ══════════════════════════════════════════════════════════════════════ --}}
 <div class="flex flex-col gap-5">
 
     {{-- ── Heading ────────────────────────────────────────────────────────── --}}
@@ -97,12 +347,29 @@
 
     {{-- ── Health insights strip + quick reports ─────────────────────────── --}}
     @php
-        $hasInsights = ($insights['over_budget'] + $insights['nearing_limit'] + $insights['stale_projects'] + $insights['overdue_external']) > 0;
+        $hasInsights = ($insights['over_budget'] + $insights['nearing_limit'] + $insights['stale_projects']
+            + $insights['overdue_external'] + $insights['payables_overdue'] + $insights['payables_due_7d']) > 0;
     @endphp
     <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
         {{-- Insights --}}
         <div class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
             <span class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Needs attention</span>
+
+            @if ($insights['payables_overdue'] > 0)
+            <a href="{{ route('vouchers.payables', ['bucket' => 'd1_30']) }}"
+               class="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-100 transition hover:bg-rose-100">
+                <i data-lucide="alarm-clock" class="h-3 w-3"></i>
+                {{ $insights['payables_overdue'] }} payables overdue · {{ $pesoShort($payables['overdue_amt']) }}
+            </a>
+            @endif
+
+            @if ($insights['payables_due_7d'] > 0)
+            <a href="{{ route('vouchers.payables') }}"
+               class="inline-flex items-center gap-1 rounded-md bg-orange-50 px-2 py-0.5 text-[11px] font-semibold text-orange-800 ring-1 ring-orange-100 transition hover:bg-orange-100">
+                <i data-lucide="hourglass" class="h-3 w-3"></i>
+                {{ $insights['payables_due_7d'] }} due in 7 days · {{ $pesoShort($payables['due_7d_amt']) }}
+            </a>
+            @endif
 
             @if ($insights['over_budget'] > 0)
             <span class="inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700 ring-1 ring-red-100">
@@ -168,6 +435,10 @@
                 <a href="{{ route('reports.collections') }}"
                    class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-omet-blue hover:text-omet-blue">
                     <i data-lucide="arrow-down-circle" class="h-3 w-3"></i> Collections
+                </a>
+                <a href="{{ route('reports.payables') }}"
+                   class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-600 hover:border-omet-blue hover:text-omet-blue">
+                    <i data-lucide="alarm-clock" class="h-3 w-3"></i> Payables
                 </a>
             </div>
         </div>
@@ -476,6 +747,7 @@
         const labels = @json(array_column($monthlyFlow, 'label'));
         const inflow  = @json(array_column($monthlyFlow, 'in'));
         const outflow = @json(array_column($monthlyFlow, 'out'));
+        {{-- Admin chart shares the same canvas id --}}
 
         new Chart(ctx, {
             type: 'bar',
@@ -535,4 +807,5 @@
         });
     });
 </script>
+@endif
 </x-app-layout>

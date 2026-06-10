@@ -9,6 +9,7 @@ use App\Models\ProjectAllocationLine;
 use App\Models\ProjectCollection;
 use App\Models\ProjectExpense;
 use App\Models\Transfer;
+use App\Models\Voucher;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -302,6 +303,57 @@ class ReportController extends Controller
     }
 
     /* ─────────────────────────────────────────────────────────────────
+     *  REPORT 5 — Payables Aging (open vouchers)
+     * ───────────────────────────────────────────────────────────────── */
+
+    public function payables(Request $request): View
+    {
+        $filters = $this->parseFilters($request);
+
+        $query = Voucher::with(['project', 'sourceBankAccount.entity', 'payments'])
+            ->whereIn('status', ['unpaid', 'partial', 'pdc']);
+
+        if ($filters['date_from']) {
+            $query->whereDate('due_date', '>=', $filters['date_from']);
+        }
+        if ($filters['date_to']) {
+            $query->whereDate('due_date', '<=', $filters['date_to']);
+        }
+        if ($filters['project_id']) {
+            $query->where('project_id', $filters['project_id']);
+        }
+
+        $open = $query->orderBy('due_date')->orderByDesc('voucher_date')->get();
+
+        // Encrypted amounts — group by aging bucket in PHP.
+        $labels = VoucherController::AGING_LABELS;
+        $groups = collect($labels)->map(function ($label, $key) use ($open) {
+            $items = $open->filter(fn ($v) => $v->agingBucket() === $key)->values();
+            return (object) [
+                'key'      => $key,
+                'label'    => $label,
+                'items'    => $items,
+                'subtotal' => (float) $items->sum(fn ($v) => $v->balanceDue()),
+            ];
+        })->filter(fn ($g) => $g->items->isNotEmpty())->values();
+
+        $grandTotal = (float) $open->sum(fn ($v) => $v->balanceDue());
+
+        return view('reports.index', [
+            'activeTab'         => 'payables',
+            'payables'          => [
+                'groups'      => $groups,
+                'grand_total' => $grandTotal,
+                'row_count'   => $open->count(),
+            ],
+            'filters'           => $filters,
+            'entities'          => $this->allEntities(),
+            'projectsForFilter' => $this->allProjects(),
+            'accountsForFilter' => $this->allAccounts(),
+        ]);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
      *  EXPORT — PDF
      * ───────────────────────────────────────────────────────────────── */
 
@@ -497,6 +549,34 @@ class ReportController extends Controller
                     'rows'         => $rows,
                     'filename_key' => 'collections',
                     'orientation'  => 'landscape',
+                    'view_data'    => $data,
+                ];
+
+            case 'payables':
+                $req = new Request($filters);
+                $data = $this->payables($req)->getData();
+                $rows = [];
+                foreach ($data['payables']['groups'] as $g) {
+                    foreach ($g->items as $v) {
+                        $rows[] = [
+                            $v->voucher_no,
+                            $v->payee_name,
+                            $v->project?->name ?? '',
+                            optional($v->due_date)->format('Y-m-d') ?? '',
+                            $g->label,
+                            number_format($v->balanceDue(), 2, '.', ''),
+                        ];
+                    }
+                    $rows[] = ['', '', '', '', 'Subtotal — ' . $g->label, number_format($g->subtotal, 2, '.', '')];
+                }
+                $rows[] = ['', '', '', '', 'TOTAL OUTSTANDING', number_format($data['payables']['grand_total'], 2, '.', '')];
+                return [
+                    'title'        => 'Payables Aging',
+                    'range'        => $range,
+                    'headings'     => ['Voucher', 'Payee', 'Project', 'Due Date', 'Aging', 'Balance'],
+                    'rows'         => $rows,
+                    'filename_key' => 'payables',
+                    'orientation'  => 'portrait',
                     'view_data'    => $data,
                 ];
 

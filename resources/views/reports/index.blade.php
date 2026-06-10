@@ -7,7 +7,13 @@
         'account-balances' => ['label' => 'Account Balances', 'icon' => 'landmark',      'route' => 'reports.accountBalances'],
         'transfers'        => ['label' => 'Transfers',        'icon' => 'arrow-left-right','route' => 'reports.transfers'],
         'collections'      => ['label' => 'Collections',      'icon' => 'arrow-down-circle','route' => 'reports.collections'],
+        'payables'         => ['label' => 'Payables Aging',   'icon' => 'alarm-clock',      'route' => 'reports.payables'],
     ];
+
+    // CFO cannot access account-balances or transfers reports.
+    if (auth()->user()->isCfo()) {
+        unset($tabs['account-balances'], $tabs['transfers']);
+    }
     $hasFilters = ! in_array($activeTab, ['overall'], true);
     $reportRouteUrl = route($tabs[$activeTab]['route']);
 @endphp
@@ -72,7 +78,7 @@
                        class="mt-1 h-9 min-w-[8.5rem] rounded-md border border-slate-200 bg-white px-3 text-[12.5px] text-slate-700 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
             </div>
 
-            @if (in_array($activeTab, ['cash-outflow', 'collections'], true))
+            @if (in_array($activeTab, ['cash-outflow', 'collections', 'payables'], true))
                 <div>
                     <label class="block text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Project</label>
                     <select name="project_id"
@@ -144,6 +150,9 @@
                     @break
                 @case('collections')
                     {{ $collections['row_count'] ?? 0 }} collection entries across {{ count($collections['groups'] ?? []) }} projects
+                    @break
+                @case('payables')
+                    {{ $payables['row_count'] ?? 0 }} open payables across {{ count($payables['groups'] ?? []) }} aging buckets
                     @break
                 @default
                     Snapshot as of {{ $overall['generated_at']->format('M j, Y g:i A') }}
@@ -421,6 +430,55 @@
                                 <td colspan="2" class="text-right text-[11px] font-bold uppercase tracking-wide text-omet-navy">Grand Total Collected</td>
                                 <td class="text-right text-[13px] font-bold tabular-nums text-emerald-700">{{ $fmt($collections['grand_total']) }}</td>
                                 <td colspan="3"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            @endif
+            @break
+
+        {{-- PAYABLES AGING --}}
+        @case('payables')
+            @if ($payables['groups']->isEmpty())
+                <div class="rounded-lg border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+                    No open payables{{ ($filters['date_from'] || $filters['date_to'] || $filters['project_id']) ? ' for the selected filters' : '' }}.
+                </div>
+            @else
+                <div class="data-grid overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Voucher</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Payee</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Project</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Due Date</th>
+                                <th class="text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach ($payables['groups'] as $g)
+                            <tr class="bg-slate-100/80 page-break">
+                                <td colspan="5" class="text-left text-[11.5px] font-bold uppercase tracking-wider text-omet-navy">{{ $g->label }}</td>
+                            </tr>
+                            @foreach ($g->items as $v)
+                                <tr class="hover:bg-slate-50/70 {{ $loop->even ? 'bg-slate-50/30' : '' }}">
+                                    <td class="font-semibold text-slate-700 whitespace-nowrap">{{ $v->voucher_no }}</td>
+                                    <td class="text-slate-700">{{ $v->payee_name }}</td>
+                                    <td class="text-slate-500">{{ $v->project?->name ?? '—' }}</td>
+                                    <td class="tabular-nums text-slate-600 whitespace-nowrap">{{ $v->due_date?->format('M j, Y') ?? '—' }}</td>
+                                    <td class="text-right font-semibold tabular-nums text-amber-700">{{ $fmt($v->balanceDue()) }}</td>
+                                </tr>
+                            @endforeach
+                            <tr class="bg-amber-50/60 font-bold">
+                                <td colspan="4" class="text-right text-[11px] uppercase tracking-wide text-amber-900">Subtotal — {{ $g->label }}</td>
+                                <td class="text-right tabular-nums text-amber-900">{{ $fmt($g->subtotal) }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="4" class="text-right text-[11px] font-bold uppercase tracking-wide text-omet-navy">Total Outstanding</td>
+                                <td class="text-right text-[13px] font-bold tabular-nums text-rose-600">{{ $fmt($payables['grand_total']) }}</td>
                             </tr>
                         </tfoot>
                     </table>

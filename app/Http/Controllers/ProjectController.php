@@ -142,6 +142,21 @@ class ProjectController extends Controller
             ->with('success', 'Project created successfully.');
     }
 
+    /* ── Delete a project ─────────────────────────────────────────────────── */
+
+    public function destroy(Project $project): RedirectResponse
+    {
+        $redirectRoute = $project->isInHouse() ? 'projects.in_house' : 'projects.external';
+
+        if ($project->image_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($project->image_path);
+        }
+
+        $project->delete();
+
+        return redirect()->route($redirectRoute)->with('success', 'Project deleted.');
+    }
+
     public function updateImage(Request $request, Project $project): RedirectResponse
     {
         $request->validate([
@@ -206,6 +221,7 @@ class ProjectController extends Controller
             'expenses.bankAccount',
             'expenses.transfer.toAccount.entity',
             'expenses.transfer.toProject',
+            'expenses.voucher',
             'allocationLines',
         ]);
 
@@ -250,15 +266,6 @@ class ProjectController extends Controller
         return back()->with('success', 'Inflow recorded.');
     }
 
-    /* ── Record an expense (outflow) ─────────────────────────────────────── */
-
-    public function storeExpense(\App\Http\Requests\StoreProjectExpenseRequest $request, Project $project): RedirectResponse
-    {
-        $project->expenses()->create($request->validated());
-
-        return back()->with('success', 'Outflow recorded.');
-    }
-
     /* ── Delete a collection ─────────────────────────────────────────────── */
 
     public function destroyCollection(ProjectCollection $collection): RedirectResponse
@@ -281,6 +288,12 @@ class ProjectController extends Controller
         if ($expense->isFromTransfer()) {
             return back()->withErrors([
                 'expense' => 'This outflow was created from a transfer. Reverse the transfer from the Transfers page to remove it.',
+            ]);
+        }
+
+        if ($expense->isFromVoucher()) {
+            return back()->withErrors([
+                'expense' => 'This outflow was posted by a voucher payment. Reverse the payment from Daily Transactions to remove it.',
             ]);
         }
 

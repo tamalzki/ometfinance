@@ -8,6 +8,7 @@ use App\Models\Entity;
 use App\Models\LedgerEntry;
 use App\Models\Project;
 use App\Models\Transfer;
+use App\Models\Voucher;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
@@ -181,11 +182,33 @@ class DashboardController extends Controller
 
         $auditEvents7d = AuditLog::where('created_at', '>=', $now->copy()->subDays(7))->count();
 
+        /* ── Payables alerts (vouchers) ─────────────────────────────────── */
+        // Encrypted amounts — open balances/aging computed in PHP.
+        $openVouchers = Voucher::with('payments')
+            ->whereIn('status', ['unpaid', 'partial', 'pdc'])
+            ->get();
+
+        $payablesOverdue   = $openVouchers->filter->isOverdue();
+        $payablesDueSoon   = $openVouchers->filter(function ($v) {
+            $d = $v->daysUntilDue();
+            return $d !== null && $d >= 0 && $d <= 7;
+        });
+
+        $payables = [
+            'outstanding'   => (float) $openVouchers->sum(fn ($v) => $v->balanceDue()),
+            'overdue_count' => $payablesOverdue->count(),
+            'overdue_amt'   => (float) $payablesOverdue->sum(fn ($v) => $v->balanceDue()),
+            'due_7d_count'  => $payablesDueSoon->count(),
+            'due_7d_amt'    => (float) $payablesDueSoon->sum(fn ($v) => $v->balanceDue()),
+        ];
+
         $insights = [
             'over_budget'      => $overBudgetCount,
             'nearing_limit'    => $nearingLimitCount,
             'stale_projects'   => $staleProjectsCount,
             'overdue_external' => $overdueExternalCount,
+            'payables_overdue' => $payablesOverdue->count(),
+            'payables_due_7d'  => $payablesDueSoon->count(),
             'audit_events_7d'  => $auditEvents7d,
         ];
 
@@ -217,6 +240,7 @@ class DashboardController extends Controller
                 'spent'           => $totalSpent,
                 'net'             => $projectNet,
             ],
+            'payables'         => $payables,
             'entityRows'       => $entityRows,
             'maxEntityTotal'   => $maxEntityTotal,
             'topInHouse'       => $topInHouse,
