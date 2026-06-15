@@ -43,8 +43,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{entitySlug}/{accountId}',           [AccountController::class, 'show'])->name('show');
     });
 
-    // Project categories — admin only
-    Route::prefix('categories')->name('categories.')->middleware('role:admin')->group(function () {
+    // Project categories — admin + CFO
+    Route::prefix('categories')->name('categories.')->middleware('role:admin,cfo')->group(function () {
         Route::get('/',              [ProjectCategoryController::class, 'index'])->name('index');
         Route::post('/',             [ProjectCategoryController::class, 'store'])->name('store');
         Route::put('/{category}',    [ProjectCategoryController::class, 'update'])->name('update');

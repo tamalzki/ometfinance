@@ -62,11 +62,11 @@
     $user        = auth()->user();
     $userInitial = strtoupper(substr($user->name ?? 'U', 0, 1));
 
-    // CFO sees Dashboard, Projects, Disbursements, and Reports — not Accounts or Transfers.
+    // CFO sees Dashboard, Categories, Projects, Disbursements, and Reports — not Accounts or Transfers.
     if ($user->isCfo()) {
-        // Keep only Dashboard from Workspace (remove Accounts)
+        // Keep Dashboard and Categories from Workspace (remove Accounts)
         $sections[0]['links'] = array_values(
-            array_filter($sections[0]['links'], fn ($l) => $l['route'] === 'dashboard')
+            array_filter($sections[0]['links'], fn ($l) => in_array($l['route'], ['dashboard', 'categories.index'], true))
         );
         // Remove Cash Movement / Transfers (index 2) — Projects (index 1) stays
         $sections = array_values(
