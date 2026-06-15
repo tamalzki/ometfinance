@@ -15,11 +15,9 @@
 <script>
 document.addEventListener('alpine:init', () => {
     Alpine.data('payablesPage', () => ({
-        showPay: @json($errors->any() && ! $errors->has('cancel') && ! old('attachment_voucher_id')),
-        showDetails: @json($errors->any() && ($errors->has('cancel') || old('attachment_voucher_id'))),
+        showPay: @json($errors->any() && ! $errors->has('cancel')),
         q: '',
         payVoucher: { id: null, no: '', payee: '', balance: 0 },
-        detail: { id: null, voucher_no: '', payee_name: '', status_label: '', amount_payable: 0, paid: 0, balance: 0, can_cancel: false, payments: [], attachments: [] },
         p: { bank_account_id: '', paid_on: @json(now()->format('Y-m-d')), amount: '', mode: 'cash', check_no: '', check_date: '', notes: '' },
         openPay(v) {
             this.payVoucher = { id: v.id, no: v.no, payee: v.payee, balance: v.balance };
@@ -27,13 +25,7 @@ document.addEventListener('alpine:init', () => {
                        amount: v.balance > 0 ? String(v.balance) : '', mode: v.mode || 'cash', check_no: '', check_date: '', notes: '' };
             this.showPay = true;
         },
-        openDetails(d) {
-            this.detail = d;
-            this.showDetails = true;
-            this.$nextTick(() => lucide.createIcons());
-        },
         closePay() { this.showPay = false; },
-        closeDetails() { this.showDetails = false; },
     }));
 });
 </script>
@@ -163,36 +155,10 @@ document.addEventListener('alpine:init', () => {
                     $haystack = strtolower(implode(' ', array_filter([$v->voucher_no, $v->payee_name, $v->project?->name, $v->typeLabel()])));
                     $payload  = ['id' => $v->id, 'no' => $v->voucher_no, 'payee' => $v->payee_name,
                                  'balance' => $balance, 'account' => $v->source_bank_account_id, 'mode' => $v->mode_of_payment];
-                    $detail   = [
-                        'id' => $v->id, 'voucher_no' => $v->voucher_no, 'payee_name' => $v->payee_name,
-                        'status' => $v->status, 'status_label' => $v->statusLabel(),
-                        'amount_payable' => (float) $v->amount_payable, 'paid' => $v->amountPaid(), 'balance' => $balance,
-                        'can_cancel' => $v->isOpen() && $v->payments->isEmpty(),
-                        'payments' => $v->payments->map(fn ($p) => [
-                            'id' => $p->id,
-                            'paid_on' => $p->paid_on?->format('M d, Y'),
-                            'amount' => (float) $p->amount,
-                            'mode_label' => \App\Models\Voucher::MODES[$p->mode] ?? ($p->mode ? ucfirst($p->mode) : '—'),
-                            'check_no' => $p->check_no,
-                            'check_date' => $p->check_date?->format('M d, Y'),
-                            'is_pdc' => $p->isPostDated(),
-                            'bank_account' => $p->bankAccount?->name,
-                            'notes' => $p->notes,
-                        ])->values(),
-                        'attachments' => $v->attachments->map(fn ($a) => [
-                            'id' => $a->id,
-                            'name' => $a->original_name,
-                            'size' => $a->humanSize(),
-                            'uploaded_at' => $a->created_at->format('M d, Y'),
-                            'download_url' => route('vouchers.attachments.download', $a),
-                        ])->values(),
-                    ];
                 @endphp
-                <tr class="group transition-colors hover:bg-slate-50/60"
+                <tr class="group cursor-pointer transition-colors hover:bg-slate-50/60"
                     x-show="q.trim() === '' || @js($haystack).includes(q.trim().toLowerCase())"
-                    @if (old('attachment_voucher_id') == $v->id)
-                    x-init="detail = {{ \Illuminate\Support\Js::from($detail) }}; showDetails = true"
-                    @endif>
+                    @click="window.location = '{{ route('vouchers.show', $v->id) }}'">
 
                     {{-- Voucher no. --}}
                     <td class="border-b border-slate-100 px-4 py-2.5 align-middle text-[12.5px] font-semibold text-slate-700 whitespace-nowrap">
@@ -251,12 +217,8 @@ document.addEventListener('alpine:init', () => {
                     </td>
 
                     {{-- Action --}}
-                    <td class="sticky right-0 z-10 border-b border-slate-100 bg-white px-3 py-2.5 align-middle group-hover:bg-slate-50">
+                    <td class="sticky right-0 z-10 border-b border-slate-100 bg-white px-3 py-2.5 align-middle group-hover:bg-slate-50" @click.stop>
                         <div class="flex items-center justify-end gap-1.5">
-                            <button type="button" @click="openDetails({{ \Illuminate\Support\Js::from($detail) }})"
-                                    class="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
-                                <i data-lucide="history" class="h-3 w-3 pointer-events-none"></i>
-                            </button>
                             <button type="button" @click="openPay({{ \Illuminate\Support\Js::from($payload) }})"
                                     class="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100">
                                 <i data-lucide="banknote" class="h-3 w-3 pointer-events-none"></i> Pay
@@ -296,7 +258,6 @@ document.addEventListener('alpine:init', () => {
 </div>
 
 @include('vouchers.partials.payment-modal')
-@include('vouchers.partials.details-modal')
 
 </div>
 </x-app-layout>

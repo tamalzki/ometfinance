@@ -78,6 +78,7 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('vouchers')->name('vouchers.')->group(function () {
         Route::get('/',                          [VoucherController::class, 'index'])->name('index');
         Route::get('/payables',                  [VoucherController::class, 'payables'])->name('payables');
+        Route::get('/{voucher}',                 [VoucherController::class, 'show'])->name('show');
         Route::post('/',                         [VoucherController::class, 'store'])->name('store');
         Route::put('/{voucher}',                 [VoucherController::class, 'update'])->name('update');
         Route::delete('/{voucher}',              [VoucherController::class, 'destroy'])->name('destroy');

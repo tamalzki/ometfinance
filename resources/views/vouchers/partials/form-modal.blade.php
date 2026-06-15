@@ -25,7 +25,7 @@
             </div>
 
             <div class="flex-1 overflow-y-auto px-6 py-5 space-y-4">
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     <div>
                         <label class="mb-1 block text-[11px] font-medium text-gray-600">Voucher No. *</label>
                         <input type="text" name="voucher_no" required x-model="f.voucher_no" placeholder="e.g. 2026-0001"
@@ -39,6 +39,11 @@
                     <div>
                         <label class="mb-1 block text-[11px] font-medium text-gray-600">Due date <span class="text-gray-400">(payable)</span></label>
                         <input type="date" name="due_date" x-model="f.due_date"
+                               class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
+                    </div>
+                    <div>
+                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Release date <span class="text-gray-400">(actual)</span></label>
+                        <input type="date" name="release_date" x-model="f.release_date"
                                class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
                     </div>
                 </div>
@@ -167,7 +172,7 @@
                             </div>
                             <div class="max-h-56 overflow-y-auto py-1">
                                 <button type="button" @click="f.source_bank_account_id = ''; acctOpen = false; acctQuery = ''"
-                                        class="flex w-full px-3 py-2 text-left text-[12px] text-slate-500 hover:bg-slate-50">— choose at payment —</button>
+                                        class="flex w-full px-3 py-2 text-left text-[12px] text-slate-500 hover:bg-slate-50">Pending — source not yet confirmed</button>
                                 <template x-for="a in filteredOptions(accounts, acctQuery)" :key="a.id">
                                     <button type="button" @click="f.source_bank_account_id = String(a.id); acctOpen = false; acctQuery = ''"
                                             class="flex w-full px-3 py-2 text-left text-[12px] hover:bg-blue-50"
@@ -210,7 +215,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {{-- Type combobox --}}
                     <div class="relative" @click.outside="typeOpen = false">
                         <label class="mb-1 block text-[11px] font-medium text-gray-600">Type</label>
@@ -266,16 +271,74 @@
                     </div>
 
                     <div>
+                        <label class="mb-1 block text-[11px] font-medium text-gray-600">PO Number</label>
+                        <input type="text" name="po_number" x-model="f.po_number" placeholder="e.g. PO6132"
+                               class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
+                    </div>
+
+                    <div>
                         <label class="mb-1 block text-[11px] font-medium text-gray-600">Reference (PR / OR / SI)</label>
                         <input type="text" name="reference" x-model="f.reference"
                                class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
                     </div>
+
+                    {{-- Payment status — selecting "Paid" records a payment for
+                         the remaining balance. Once fully paid this is locked;
+                         reverse payment(s) from the voucher view to undo. --}}
+                    <div>
+                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Payment status</label>
+
+                        <template x-if="isCancelled">
+                            <div>
+                                <input type="text" value="Cancelled" disabled
+                                       class="h-10 w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-500 outline-none">
+                                <input type="hidden" name="payment_status" value="unpaid">
+                                <p class="mt-1 text-[10.5px] text-gray-400">Reactivate this voucher before changing payment status.</p>
+                            </div>
+                        </template>
+
+                        <template x-if="!isCancelled && !alreadyPaid">
+                            <div>
+                                <select name="payment_status" x-model="f.payment_status"
+                                        class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
+                                    <option value="unpaid">Unpaid</option>
+                                    <option value="paid">Paid</option>
+                                </select>
+                                <template x-if="hasPartialPayment">
+                                    <p class="mt-1 text-[10.5px] text-gray-400">
+                                        Currently <span class="font-medium text-slate-500" x-text="statusLabel(f.voucher_status)"></span>.
+                                        Selecting Paid records the remaining <span class="font-medium" x-text="formatPeso(f.balance_due)"></span>.
+                                    </p>
+                                </template>
+                                <template x-if="f.payment_status === 'paid'">
+                                    <p class="mt-1 text-[10.5px] text-gray-400">
+                                        <span x-text="editId ? 'A payment for the remaining balance will be recorded immediately, dated today.' : 'A full payment will be recorded immediately, dated to the voucher date.'"></span>
+                                        <template x-if="editId && f.balance_due > 0">
+                                            <span> Amount: <span class="font-medium" x-text="formatPeso(f.balance_due)"></span>.</span>
+                                        </template>
+                                    </p>
+                                </template>
+                                <template x-if="f.payment_status === 'paid' && !f.source_bank_account_id">
+                                    <p class="mt-1 text-[10.5px] font-medium text-amber-700">Set a source bank account — required to post the payment to the ledger.</p>
+                                </template>
+                            </div>
+                        </template>
+
+                        <template x-if="!isCancelled && alreadyPaid">
+                            <div>
+                                <input type="text" value="Paid" disabled
+                                       class="h-10 w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-50 px-3 text-[13px] text-slate-500 outline-none">
+                                <input type="hidden" name="payment_status" value="paid">
+                                <p class="mt-1 text-[10.5px] text-gray-400">Already fully paid. To undo, reverse the payment(s) from the voucher's view page.</p>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
-                <template x-if="editId">
+                <template x-if="editId && !isCancelled">
                     <p class="text-[11px] text-gray-400">
                         <i data-lucide="info" class="inline h-3 w-3 -mt-0.5"></i>
-                        Status is derived automatically from recorded payments (Unpaid → Partially Paid → Paid, with PDC detection). Use the <span class="font-medium text-slate-500">Cancel</span> action from the register to void a voucher instead.
+                        Partial and PDC statuses are set automatically from recorded payments. Use <span class="font-medium text-slate-500">Cancel</span> on the register to void a voucher.
                     </p>
                 </template>
 
@@ -311,6 +374,12 @@
                     </div>
                 </div>
 
+                <div>
+                    <label class="mb-1 block text-[11px] font-medium text-gray-600">Notes <span class="text-gray-400">(internal)</span></label>
+                    <textarea name="notes" rows="2" x-model="f.notes"
+                              class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12.5px] text-gray-700 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10"></textarea>
+                </div>
+
                 {{-- Optional attachments --}}
                 <div class="rounded-lg border border-dashed border-slate-200 bg-slate-50/50 px-4 py-3">
                     <div class="flex items-center justify-between gap-2">
@@ -331,7 +400,7 @@
                                 </li>
                             </template>
                         </ul>
-                        <p class="mt-2 text-[10.5px] text-slate-400">To remove an existing file, open <span class="font-medium text-slate-500">History</span> on the voucher row.</p>
+                        <p class="mt-2 text-[10.5px] text-slate-400">To remove an existing file, open the voucher's <span class="font-medium text-slate-500">view page</span>.</p>
                     </template>
 
                     <input type="file" name="attachments[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"

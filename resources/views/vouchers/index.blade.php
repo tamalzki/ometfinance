@@ -50,10 +50,12 @@
         'voucher_no'             => old('voucher_no', ''),
         'voucher_date'           => old('voucher_date', now()->format('Y-m-d')),
         'due_date'               => old('due_date', ''),
+        'release_date'           => old('release_date', ''),
         'payee_name'             => old('payee_name', ''),
         'project_id'             => old('project_id', $activeProject ? (string) $activeProject->id : ''),
         'source_bank_account_id' => old('source_bank_account_id', ''),
         'transaction_type'       => old('transaction_type', 'rfp'),
+        'po_number'              => old('po_number', ''),
         'reference'              => old('reference', ''),
         'amount_payable'         => old('amount_payable', ''),
         'mode_of_payment'        => old('mode_of_payment', 'cash'),
@@ -62,6 +64,8 @@
         'source_of_fund'         => old('source_of_fund', ''),
         'or_ref'                 => old('or_ref', ''),
         'change_amount'          => old('change_amount', ''),
+        'notes'                  => old('notes', ''),
+        'payment_status'         => old('payment_status', 'unpaid'),
         'attachments'            => [],
     ];
 
@@ -72,7 +76,7 @@
     // the Add Voucher form pre-filled with that project, per the "all
     // outflow must have a voucher" rule.
     $showFormInitial = $errors->any()
-        ? (! old('paying_voucher_id') && ! old('attachment_voucher_id'))
+        ? ! old('paying_voucher_id')
         : ($newVoucher && $activeProject !== null);
 @endphp
 
@@ -81,11 +85,9 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('vouchersPage', () => ({
         showForm: @json($showFormInitial),
         showPay: false,
-        showDetails: @json($errors->any() && ($errors->has('cancel') || old('attachment_voucher_id'))),
         editId: @json(old('editing_voucher_id') ? (int) old('editing_voucher_id') : null),
         lockedFields: false,
         payVoucher: { id: null, no: '', payee: '', balance: 0 },
-        detail: { id: null, voucher_no: '', payee_name: '', status_label: '', amount_payable: 0, paid: 0, balance: 0, can_cancel: false, payments: [], attachments: [] },
         q: '',
 
         projects: @json($projectsForPicker),
@@ -94,6 +96,7 @@ document.addEventListener('alpine:init', () => {
         modes: @json($modesForPicker),
         payees: @json($payeesForPicker),
         categories: @json($categoriesForPicker),
+        statuses: @json($statuses),
 
         projOpen: false, projQuery: '',
         acctOpen: false, acctQuery: '',
@@ -133,9 +136,9 @@ document.addEventListener('alpine:init', () => {
             return p ? p.label : '— none —';
         },
         accountLabel(id) {
-            if (! id) return '— choose at payment —';
+            if (! id) return 'Pending — source not yet confirmed';
             const a = this.accounts.find(x => String(x.id) === String(id));
-            return a ? a.label : '— choose at payment —';
+            return a ? a.label : 'Pending — source not yet confirmed';
         },
         typeLabel(id) {
             const t = this.types.find(x => x.id === id);
@@ -150,6 +153,21 @@ document.addEventListener('alpine:init', () => {
             const c = this.categories.find(x => String(x.id) === String(id));
             return c ? c.label : '— select category —';
         },
+        statusLabel(status) {
+            return this.statuses[status] || status;
+        },
+        get alreadyPaid() {
+            return this.f.payment_status === 'paid';
+        },
+        get isCancelled() {
+            return this.f.voucher_status === 'cancelled';
+        },
+        get hasPartialPayment() {
+            return ['partial', 'pdc'].includes(this.f.voucher_status);
+        },
+        formatPeso(n) {
+            return '₱' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
 
         openAdd() {
             this.editId = null;
@@ -158,10 +176,11 @@ document.addEventListener('alpine:init', () => {
             this.closeFormCombos();
             this.f = {
                 voucher_no: '', voucher_date: @json(now()->format('Y-m-d')),
-                due_date: '', payee_name: '', project_id: '', source_bank_account_id: '',
-                transaction_type: 'rfp', category_id: '', reference: '', amount_payable: '',
+                due_date: '', release_date: '', payee_name: '', project_id: '', source_bank_account_id: '',
+                transaction_type: 'rfp', category_id: '', po_number: '', reference: '', amount_payable: '',
                 mode_of_payment: 'cash', particular: '',
-                remarks: '', source_of_fund: '', or_ref: '', change_amount: '',
+                remarks: '', source_of_fund: '', or_ref: '', change_amount: '', notes: '',
+                payment_status: 'unpaid', voucher_status: '', balance_due: 0,
                 attachments: [],
             };
             this.showForm = true;
@@ -175,11 +194,13 @@ document.addEventListener('alpine:init', () => {
                 voucher_no: v.voucher_no,
                 voucher_date: v.voucher_date,
                 due_date: v.due_date || '',
+                release_date: v.release_date || '',
                 payee_name: v.payee_name,
                 project_id: v.project_id ? String(v.project_id) : '',
                 source_bank_account_id: v.source_bank_account_id ? String(v.source_bank_account_id) : '',
                 transaction_type: v.transaction_type || 'rfp',
                 category_id: v.category_id ? String(v.category_id) : '',
+                po_number: v.po_number || '',
                 reference: v.reference || '',
                 amount_payable: String(v.amount_payable),
                 mode_of_payment: v.mode_of_payment || 'cash',
@@ -188,6 +209,10 @@ document.addEventListener('alpine:init', () => {
                 source_of_fund: v.source_of_fund || '',
                 or_ref: v.or_ref || '',
                 change_amount: v.change_amount ? String(v.change_amount) : '',
+                notes: v.notes || '',
+                payment_status: v.status === 'paid' ? 'paid' : 'unpaid',
+                voucher_status: v.status || '',
+                balance_due: v.balance ?? 0,
                 attachments: v.attachments || [],
             };
             this.showForm = true;
@@ -203,14 +228,8 @@ document.addEventListener('alpine:init', () => {
             };
             this.showPay = true;
         },
-        openDetails(d) {
-            this.detail = d;
-            this.showDetails = true;
-            this.$nextTick(() => lucide.createIcons());
-        },
         closeForm() { this.showForm = false; this.editId = null; this.closeFormCombos(); },
         closePay() { this.showPay = false; },
-        closeDetails() { this.showDetails = false; },
     }));
 });
 </script>
@@ -346,6 +365,7 @@ document.addEventListener('alpine:init', () => {
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[96px]">Date</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[96px]">Due</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Payee / Particular</th>
+                <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[100px]">PO No.</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[100px]">Ref</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Project</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[110px]">Type</th>
@@ -363,20 +383,23 @@ document.addEventListener('alpine:init', () => {
                     $balance = $v->balanceDue();
                     $overdue = $v->isOverdue();
                     $haystack = strtolower(implode(' ', array_filter([
-                        $v->voucher_no, $v->payee_name, $v->project?->name, $v->typeLabel(), $v->reference,
+                        $v->voucher_no, $v->payee_name, $v->project?->name, $v->typeLabel(), $v->po_number, $v->reference,
                     ])));
                     $payload = [
                         'id' => $v->id, 'voucher_no' => $v->voucher_no,
                         'voucher_date' => $v->voucher_date->format('Y-m-d'),
                         'due_date' => $v->due_date?->format('Y-m-d'),
+                        'release_date' => $v->release_date?->format('Y-m-d'),
                         'payee_name' => $v->payee_name, 'project_id' => $v->project_id,
                         'source_bank_account_id' => $v->source_bank_account_id,
                         'transaction_type' => $v->transaction_type, 'category_id' => $v->category_id,
+                        'po_number' => $v->po_number,
                         'reference' => $v->reference,
                         'amount_payable' => (float) $v->amount_payable, 'mode_of_payment' => $v->mode_of_payment,
                         'status' => $v->status, 'particular' => $v->particular,
                         'remarks' => $v->remarks, 'source_of_fund' => $v->source_of_fund,
                         'or_ref' => $v->or_ref, 'change_amount' => (float) ($v->change_amount ?? 0),
+                        'notes' => $v->notes,
                         'balance' => $balance,
                         'has_payments' => $v->payments->isNotEmpty(),
                         'attachments' => $v->attachments->map(fn ($a) => [
@@ -385,36 +408,10 @@ document.addEventListener('alpine:init', () => {
                             'size' => $a->humanSize(),
                         ])->values(),
                     ];
-                    $detail = [
-                        'id' => $v->id, 'voucher_no' => $v->voucher_no, 'payee_name' => $v->payee_name,
-                        'status' => $v->status, 'status_label' => $v->statusLabel(),
-                        'amount_payable' => (float) $v->amount_payable, 'paid' => $v->amountPaid(), 'balance' => $balance,
-                        'can_cancel' => $v->isOpen() && $v->payments->isEmpty(),
-                        'payments' => $v->payments->map(fn ($p) => [
-                            'id' => $p->id,
-                            'paid_on' => $p->paid_on?->format('M d, Y'),
-                            'amount' => (float) $p->amount,
-                            'mode_label' => \App\Models\Voucher::MODES[$p->mode] ?? ($p->mode ? ucfirst($p->mode) : '—'),
-                            'check_no' => $p->check_no,
-                            'check_date' => $p->check_date?->format('M d, Y'),
-                            'is_pdc' => $p->isPostDated(),
-                            'bank_account' => $p->bankAccount?->name,
-                            'notes' => $p->notes,
-                        ])->values(),
-                        'attachments' => $v->attachments->map(fn ($a) => [
-                            'id' => $a->id,
-                            'name' => $a->original_name,
-                            'size' => $a->humanSize(),
-                            'uploaded_at' => $a->created_at->format('M d, Y'),
-                            'download_url' => route('vouchers.attachments.download', $a),
-                        ])->values(),
-                    ];
                 @endphp
-                <tr class="group transition-colors hover:bg-slate-50/70"
+                <tr class="group cursor-pointer transition-colors hover:bg-slate-50/70"
                     x-show="q.trim() === '' || @js($haystack).includes(q.trim().toLowerCase())"
-                    @if (old('attachment_voucher_id') == $v->id)
-                    x-init="detail = {{ \Illuminate\Support\Js::from($detail) }}; showDetails = true; $nextTick(() => lucide.createIcons())"
-                    @endif>
+                    @click="window.location = '{{ route('vouchers.show', $v->id) }}'">
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[12.5px] font-semibold text-slate-700 whitespace-nowrap">{{ $v->voucher_no }}</td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top tabular-nums text-[12px] text-slate-600 whitespace-nowrap">{{ $v->voucher_date->format('M d, Y') }}</td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top tabular-nums text-[12px] whitespace-nowrap {{ $overdue ? 'font-semibold text-rose-600' : 'text-slate-600' }}">
@@ -428,11 +425,14 @@ document.addEventListener('alpine:init', () => {
                         @endif
                     </td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[11.5px] text-slate-500 whitespace-nowrap">
+                        {{ $v->po_number ?? '—' }}
+                    </td>
+                    <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[11.5px] text-slate-500 whitespace-nowrap">
                         {{ $v->reference ?? '—' }}
                     </td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[12.5px] text-slate-600">
                         @if ($v->project)
-                            <a href="{{ route('projects.show', $v->project) }}" class="text-[12px] font-medium text-omet-blue hover:underline">{{ $v->project->name }}</a>
+                            <a href="{{ route('projects.show', $v->project) }}" @click.stop class="text-[12px] font-medium text-omet-blue hover:underline">{{ $v->project->name }}</a>
                         @else <span class="text-slate-300">—</span> @endif
                     </td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[12px] text-slate-600">{{ $v->typeLabel() }}</td>
@@ -447,12 +447,8 @@ document.addEventListener('alpine:init', () => {
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top">
                         <span class="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 {{ $statusTone[$v->status] ?? 'bg-slate-100 text-slate-600 ring-slate-200' }}">{{ $v->statusLabel() }}</span>
                     </td>
-                    <td class="sticky right-0 z-10 border-b border-l border-slate-200 bg-white px-3 py-2.5 align-middle group-hover:bg-slate-50">
+                    <td class="sticky right-0 z-10 border-b border-l border-slate-200 bg-white px-3 py-2.5 align-middle group-hover:bg-slate-50" @click.stop>
                         <div class="flex flex-row flex-nowrap items-center justify-end gap-1.5">
-                            <button type="button" @click="openDetails({{ \Illuminate\Support\Js::from($detail) }})"
-                                    class="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
-                                <i data-lucide="history" class="h-3 w-3 pointer-events-none"></i> History
-                            </button>
                             @if ($v->isOpen())
                                 <button type="button" @click="openPay({{ \Illuminate\Support\Js::from($payload) }})"
                                         class="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100">
@@ -491,7 +487,7 @@ document.addEventListener('alpine:init', () => {
                 </tr>
             @empty
                 <tr>
-                    <td colspan="12" class="px-6 py-14 text-center">
+                    <td colspan="13" class="px-6 py-14 text-center">
                         <i data-lucide="receipt" class="mx-auto mb-2 h-8 w-8 text-slate-200"></i>
                         <p class="text-xs text-slate-400">No transactions yet. Use <span class="font-semibold text-omet-blue">Add Voucher</span>.</p>
                     </td>
@@ -503,7 +499,6 @@ document.addEventListener('alpine:init', () => {
 
 @include('vouchers.partials.form-modal')
 @include('vouchers.partials.payment-modal')
-@include('vouchers.partials.details-modal')
 
 </div>
 </x-app-layout>

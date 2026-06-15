@@ -81,6 +81,19 @@ class VoucherController extends Controller
         ]);
     }
 
+    /* ── Voucher detail / history view ─────────────────────────────────── */
+
+    public function show(Voucher $voucher): View
+    {
+        $voucher->load(['project', 'sourceBankAccount.entity', 'category.parent', 'payments.bankAccount', 'attachments']);
+
+        return view('vouchers.show', [
+            'voucher'  => $voucher,
+            'accounts' => $this->accountsForPicker(),
+            'modes'    => Voucher::MODES,
+        ]);
+    }
+
     /* ── Payables tab (open items only, with aging) ────────────────────── */
 
     public function payables(Request $request): View
@@ -136,19 +149,47 @@ class VoucherController extends Controller
         $data = $this->validateVoucher($request);
         $this->validateAttachments($request);
 
+        $paidOnCreate = ($data['payment_status'] ?? 'unpaid') === 'paid';
+        unset($data['payment_status']);
+
         $data['status'] = 'unpaid';
 
         $voucher = Voucher::create($data);
         $this->saveAttachmentsFromRequest($request, $voucher);
 
+        // "Paid" at creation means the cash already went out — record the
+        // full payment now so status, ledger and project outflow stay
+        // derived from real VoucherPayment rows (no manual status override).
+        if ($paidOnCreate) {
+            VoucherService::recordPayment($voucher, [
+                'bank_account_id' => $voucher->source_bank_account_id,
+                'paid_on'         => $voucher->voucher_date->toDateString(),
+                'amount'          => $voucher->amount_payable,
+                'mode'            => $voucher->mode_of_payment,
+            ]);
+        }
+
         return redirect()->route('vouchers.index', $voucher->project_id ? ['project_id' => $voucher->project_id] : [])
-            ->with('success', "Voucher {$voucher->voucher_no} for {$voucher->payee_name} created (₱" . number_format((float) $voucher->amount_payable, 2) . ').');
+            ->with('success', "Voucher {$voucher->voucher_no} for {$voucher->payee_name} created (₱" . number_format((float) $voucher->amount_payable, 2) . ')' . ($paidOnCreate ? ' and marked as paid.' : '.'));
     }
 
     public function update(Request $request, Voucher $voucher): RedirectResponse
     {
         $data = $this->validateVoucher($request, $voucher);
         $this->validateAttachments($request);
+
+        $markPaid = ($data['payment_status'] ?? 'unpaid') === 'paid';
+        unset($data['payment_status']);
+
+        if ($voucher->status === 'cancelled') {
+            $markPaid = false;
+        }
+
+        if ($voucher->status === 'paid' && ! $markPaid) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['payment_status' => 'A fully paid voucher cannot be set back to unpaid here — reverse the payment(s) from the voucher view first.']);
+        }
 
         // Once money has moved against this voucher, the figures that drove
         // that payment must stay put — changing them would desync the ledger
@@ -159,10 +200,32 @@ class VoucherController extends Controller
 
         $voucher->update($data);
         $this->saveAttachmentsFromRequest($request, $voucher);
+        $voucher->refresh();
+
+        $paidOnUpdate = false;
+        if ($markPaid && $voucher->balanceDue() > 0) {
+            if (! $voucher->source_bank_account_id) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['source_bank_account_id' => 'Set a source bank account before marking this voucher as paid.']);
+            }
+
+            VoucherService::recordPayment($voucher, [
+                'bank_account_id' => $voucher->source_bank_account_id,
+                'paid_on'         => now()->toDateString(),
+                'amount'          => $voucher->balanceDue(),
+                'mode'            => $voucher->mode_of_payment,
+            ]);
+            $paidOnUpdate = true;
+            $voucher->refresh();
+        }
+
         VoucherService::recompute($voucher);
 
+        $message = "Voucher {$voucher->voucher_no} updated" . ($paidOnUpdate ? ' and marked as paid.' : '.');
+
         return redirect()->route('vouchers.index', $voucher->project_id ? ['project_id' => $voucher->project_id] : [])
-            ->with('success', "Voucher {$voucher->voucher_no} updated.");
+            ->with('success', $message);
     }
 
     public function destroy(Voucher $voucher): RedirectResponse
@@ -279,6 +342,7 @@ class VoucherController extends Controller
             'source_bank_account_id' => ['nullable', 'exists:bank_accounts,id'],
             'transaction_type'       => ['nullable', Rule::in(array_keys(Voucher::TYPES))],
             'category_id'            => ['required', 'exists:project_categories,id'],
+            'po_number'              => ['nullable', 'string', 'max:1000'],
             'reference'              => ['nullable', 'string', 'max:255'],
             'amount_payable'         => ['required', 'numeric', 'min:0.01'],
             'mode_of_payment'        => ['nullable', Rule::in(array_keys(Voucher::MODES))],
@@ -288,6 +352,7 @@ class VoucherController extends Controller
             'source_of_fund'         => ['nullable', 'string', 'max:1000'],
             'or_ref'                 => ['nullable', 'string', 'max:255'],
             'change_amount'          => ['nullable', 'numeric', 'min:0'],
+            'payment_status'         => ['nullable', Rule::in(['paid', 'unpaid'])],
         ]);
     }
 
