@@ -3,7 +3,7 @@
 @endphp
 
 <x-app-layout :page-title="$project->name">
-    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono">
+    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono" :other-projects="$otherProjects">
 
         @if ($project->expenses->isEmpty())
             <div class="px-4 py-10 text-center">

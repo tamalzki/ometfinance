@@ -197,7 +197,8 @@ class ProjectController extends Controller
 
     public function showInflow(Project $project): View
     {
-        return view('projects.external.inflow', $this->loadProjectData($project));
+        $template = $project->isExternal() ? 'projects.external.inflow' : 'projects.in_house.funding';
+        return view($template, $this->loadProjectData($project));
     }
 
     public function showOutflow(Project $project): View
@@ -222,6 +223,7 @@ class ProjectController extends Controller
             'expenses.transfer.toAccount.entity',
             'expenses.transfer.toProject',
             'expenses.voucher',
+            'expenses.categoryRef.parent',
             'allocationLines',
         ]);
 
@@ -229,7 +231,14 @@ class ProjectController extends Controller
 
         $collectionsChrono = $project->collections->sortBy('collected_on')->values();
 
-        return compact('project', 'bankAccounts', 'collectionsChrono');
+        // Source projects offered in the "support from another project" select.
+        $otherProjects = Project::where('id', '!=', $project->id)
+            ->whereNotIn('status', ['completed', 'cancelled'])
+            ->orderBy('kind')
+            ->orderBy('name')
+            ->get(['id', 'name', 'kind']);
+
+        return compact('project', 'bankAccounts', 'collectionsChrono', 'otherProjects');
     }
 
     /* ── Update project ──────────────────────────────────────────────────── */
@@ -261,9 +270,47 @@ class ProjectController extends Controller
 
     public function storeCollection(\App\Http\Requests\StoreProjectCollectionRequest $request, Project $project): RedirectResponse
     {
+        // In-house projects have no client income: every inflow is borrowed
+        // funds or support from another project, which must go through the
+        // funding flow so bank ledgers stay in sync.
+        if ($project->isInHouse()) {
+            return back()->withErrors([
+                'collection' => 'In-house projects are funded from other accounts. Use the Funding form instead.',
+            ]);
+        }
+
         $project->collections()->create($request->validated());
 
-        return back()->with('success', 'Inflow recorded.');
+        return back()->with('success', 'Collection recorded.');
+    }
+
+    /* ── Record funding (borrow / support from another account) ─────────── */
+
+    public function storeFunding(\App\Http\Requests\StoreProjectFundingRequest $request, Project $project): RedirectResponse
+    {
+        $validated = $request->validated();
+
+        $transfer = \App\Services\TransferService::create([
+            'from_account_id' => $validated['from_account_id'],
+            'to_account_id'   => $validated['to_account_id'],
+            'from_project_id' => $validated['from_project_id'] ?? null,
+            'to_project_id'   => $project->id,
+            'date'            => $validated['date'],
+            'amount'          => $validated['amount'],
+            'purpose'         => 'project_funding',
+            'memo'            => 'Funding for ' . $project->name,
+            'reason'          => $validated['notes'] ?? null,
+        ]);
+
+        $sourceLabel = $transfer->fromProject
+            ? $transfer->fromProject->name
+            : $transfer->fromAccount?->name;
+
+        return back()->with('success', sprintf(
+            '₱%s funded from %s. Both bank ledgers were updated.',
+            number_format((float) $transfer->amount, 2),
+            $sourceLabel
+        ));
     }
 
     /* ── Delete a collection ─────────────────────────────────────────────── */

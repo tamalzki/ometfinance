@@ -93,12 +93,14 @@ document.addEventListener('alpine:init', () => {
         types: @json($typesForPicker),
         modes: @json($modesForPicker),
         payees: @json($payeesForPicker),
+        categories: @json($categoriesForPicker),
 
         projOpen: false, projQuery: '',
         acctOpen: false, acctQuery: '',
         typeOpen: false, typeQuery: '',
         modeOpen: false, modeQuery: '',
         payeeOpen: false, payeeQuery: '', payeeOther: @json($payeeOtherInitial),
+        categoryOpen: false, categoryQuery: '',
 
         // header form model
         f: @json($formDefaults),
@@ -112,11 +114,13 @@ document.addEventListener('alpine:init', () => {
             this.typeOpen = false;
             this.modeOpen = false;
             this.payeeOpen = false;
+            this.categoryOpen = false;
             this.projQuery = '';
             this.acctQuery = '';
             this.typeQuery = '';
             this.modeQuery = '';
             this.payeeQuery = '';
+            this.categoryQuery = '';
         },
         filteredOptions(list, query) {
             const needle = (query || '').trim().toLowerCase();
@@ -141,6 +145,11 @@ document.addEventListener('alpine:init', () => {
             const m = this.modes.find(x => x.id === id);
             return m ? m.label : '— select mode —';
         },
+        categoryLabel(id) {
+            if (! id) return '— select category —';
+            const c = this.categories.find(x => String(x.id) === String(id));
+            return c ? c.label : '— select category —';
+        },
 
         openAdd() {
             this.editId = null;
@@ -150,7 +159,7 @@ document.addEventListener('alpine:init', () => {
             this.f = {
                 voucher_no: '', voucher_date: @json(now()->format('Y-m-d')),
                 due_date: '', payee_name: '', project_id: '', source_bank_account_id: '',
-                transaction_type: 'rfp', reference: '', amount_payable: '',
+                transaction_type: 'rfp', category_id: '', reference: '', amount_payable: '',
                 mode_of_payment: 'cash', particular: '',
                 remarks: '', source_of_fund: '', or_ref: '', change_amount: '',
                 attachments: [],
@@ -170,6 +179,7 @@ document.addEventListener('alpine:init', () => {
                 project_id: v.project_id ? String(v.project_id) : '',
                 source_bank_account_id: v.source_bank_account_id ? String(v.source_bank_account_id) : '',
                 transaction_type: v.transaction_type || 'rfp',
+                category_id: v.category_id ? String(v.category_id) : '',
                 reference: v.reference || '',
                 amount_payable: String(v.amount_payable),
                 mode_of_payment: v.mode_of_payment || 'cash',
@@ -361,7 +371,8 @@ document.addEventListener('alpine:init', () => {
                         'due_date' => $v->due_date?->format('Y-m-d'),
                         'payee_name' => $v->payee_name, 'project_id' => $v->project_id,
                         'source_bank_account_id' => $v->source_bank_account_id,
-                        'transaction_type' => $v->transaction_type, 'reference' => $v->reference,
+                        'transaction_type' => $v->transaction_type, 'category_id' => $v->category_id,
+                        'reference' => $v->reference,
                         'amount_payable' => (float) $v->amount_payable, 'mode_of_payment' => $v->mode_of_payment,
                         'status' => $v->status, 'particular' => $v->particular,
                         'remarks' => $v->remarks, 'source_of_fund' => $v->source_of_fund,

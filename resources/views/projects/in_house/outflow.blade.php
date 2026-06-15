@@ -3,7 +3,7 @@
 @endphp
 
 <x-app-layout :page-title="$project->name">
-    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono">
+    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono" :other-projects="$otherProjects">
 
         @if ($project->expenses->isEmpty())
             <div class="px-4 py-10 text-center">
@@ -54,8 +54,9 @@
                                         <span class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-700" title="Voucher partially paid — balance still due">Partial</span>
                                     @endif
                                 @endif
-                                @if ($e->category)
-                                    <span class="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-medium uppercase tracking-wide text-slate-500">{{ $e->category }}</span>
+                                @php $catLabel = $e->categoryRef?->fullLabel() ?? $e->category; @endphp
+                                @if ($catLabel)
+                                    <span class="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-medium uppercase tracking-wide text-slate-500">{{ $catLabel }}</span>
                                 @endif
                                 @if ($e->vendor_ref && $e->description && $e->vendor_ref !== $e->description)
                                     <p class="mt-0.5 text-slate-400">{{ $e->vendor_ref }}</p>

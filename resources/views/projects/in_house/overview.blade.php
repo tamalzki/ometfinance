@@ -23,7 +23,7 @@
 @endphp
 
 <x-app-layout :page-title="$project->name">
-    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono">
+    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono" :other-projects="$otherProjects">
 
         <div class="space-y-4 p-4">
 
@@ -91,7 +91,7 @@
             {{-- Recent activity panels --}}
             <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
 
-                {{-- Recent funding (loan disbursements) --}}
+                {{-- Recent funding (borrowed from accounts / project support) --}}
                 <div class="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                     <div class="flex items-center justify-between border-b border-emerald-100 bg-emerald-50/60 px-4 py-2">
                         <h3 class="text-xs font-bold uppercase tracking-wider text-emerald-800">
@@ -105,7 +105,7 @@
                     </div>
                     @if ($recentInflows->isEmpty())
                         <div class="px-4 py-6 text-center">
-                            <p class="text-[11px] text-gray-500">No funding recorded yet. Use the green <strong>Funding</strong> button above to log a loan disbursement.</p>
+                            <p class="text-[11px] text-gray-500">No funding recorded yet. Use the green <strong>Funding</strong> button above to borrow from another account or take support from another project.</p>
                         </div>
                     @else
                         <div class="overflow-x-auto">

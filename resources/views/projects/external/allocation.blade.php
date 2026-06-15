@@ -11,7 +11,7 @@
 @endphp
 
 <x-app-layout :page-title="$project->name">
-    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono">
+    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono" :other-projects="$otherProjects">
 
         <div class="px-2 pt-3 pb-3 sm:px-3">
             @if ($allocLines->isEmpty())

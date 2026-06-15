@@ -12,7 +12,7 @@ class ProjectExpense extends Model
 
     protected $fillable = [
         'project_id', 'bank_account_id', 'transfer_id', 'voucher_id', 'spent_on',
-        'amount', 'description', 'vendor_ref', 'category', 'notes',
+        'amount', 'description', 'vendor_ref', 'category', 'category_id', 'notes',
     ];
 
     protected $casts = [
@@ -40,6 +40,11 @@ class ProjectExpense extends Model
     public function voucher(): BelongsTo
     {
         return $this->belongsTo(Voucher::class);
+    }
+
+    public function categoryRef(): BelongsTo
+    {
+        return $this->belongsTo(ProjectCategory::class, 'category_id');
     }
 
     public function isFromTransfer(): bool

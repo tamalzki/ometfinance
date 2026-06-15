@@ -51,6 +51,24 @@ class Project extends Model
         return $this->totalCollected() - $this->totalExpenses();
     }
 
+    /**
+     * Inflows recorded by hand — for external projects these are client
+     * collections. Transfer-linked rows are borrowings / project support.
+     */
+    public function totalClientCollected(): float
+    {
+        return (float) $this->collections
+            ->filter(fn ($c) => ! $c->isFromTransfer())
+            ->sum(fn ($c) => (float) $c->amount);
+    }
+
+    public function totalBorrowed(): float
+    {
+        return (float) $this->collections
+            ->filter(fn ($c) => $c->isFromTransfer())
+            ->sum(fn ($c) => (float) $c->amount);
+    }
+
     /* ── relationships ── */
 
     public function collections(): HasMany

@@ -119,7 +119,7 @@
                 </p>
             </div>
             <div class="flex flex-col justify-center px-5 py-3">
-                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Loan funded</p>
+                <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Funded</p>
                 <p class="mt-1 text-base font-bold tabular-nums text-emerald-600" title="{{ $fmt($summary['total_collected']) }}">{{ $fmt($summary['total_collected']) }}</p>
             </div>
             <div class="flex flex-col justify-center px-5 py-3">

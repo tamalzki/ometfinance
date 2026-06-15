@@ -2,6 +2,7 @@
     'project',
     'bankAccounts' => collect(),
     'collectionsChrono' => collect(),
+    'otherProjects' => collect(),
 ])
 
 @php
@@ -24,22 +25,47 @@
     $statusLabel = $statusLabels[$project->status] ?? ucfirst($project->status);
     $statusBadge = $badgeClasses[$project->status] ?? 'bg-gray-100 text-gray-700';
 
-    $totalCollected = $project->totalCollected();
-    $totalExpenses  = $project->totalExpenses();
-    $netPosition    = $project->netCashPosition();
-    $completionPct  = $project->contract_value > 0
-        ? min(100, round($totalCollected / $project->contract_value * 100, 1))
-        : 0;
+    $totalCollected  = $project->totalCollected();
+    $totalExpenses   = $project->totalExpenses();
+    $netPosition     = $project->netCashPosition();
+    $clientCollected = $project->totalClientCollected();
+    $borrowedTotal   = $project->totalBorrowed();
 
     $isExternal     = $project->isExternal();
+
+    // External progress counts client collections only — borrowed funds are
+    // not payments against the contract.
+    $completionPct  = $project->contract_value > 0
+        ? min(100, round(($isExternal ? $clientCollected : $totalCollected) / $project->contract_value * 100, 1))
+        : 0;
     $contractLabel  = $isExternal ? 'Contract' : 'Budget';
     $percentLabel   = $isExternal ? '% Collected' : '% Used';
     $contractValue  = (float) $project->contract_value;
     $budgetUsedPct  = $contractValue > 0 ? min(100, round($totalExpenses / $contractValue * 100, 1)) : 0;
 
-    // In-house projects are loan-funded: "Inflow" reads as "Funding" everywhere.
+    // In-house projects are funded from other accounts: "Inflow" reads as
+    // "Funding" everywhere.
     $inflowLabel       = $isExternal ? 'Inflow' : 'Funding';
     $totalInflowLabel  = $isExternal ? 'Total inflow' : 'Total funded';
+
+    // Which pane the inflow modal opens on; restored after validation errors.
+    $initialInflowMode = in_array(old('_form'), ['collection', 'funding'], true)
+        ? old('_form')
+        : ($isExternal ? 'collection' : 'funding');
+
+    // Option lists for the searchable dropdowns in the inflow modal.
+    $bankAccountOptions = $bankAccounts->map(fn ($ba) => [
+        'value'  => $ba->id,
+        'label'  => $ba->name . ' (' . ($ba->entity->name ?? '?') . ')',
+        'search' => strtolower($ba->name . ' ' . ($ba->entity->name ?? '') . ' ' . ($ba->bank_name ?? '')),
+    ])->values()->all();
+
+    $sourceProjectOptions = $otherProjects->map(fn ($op) => [
+        'value'  => $op->id,
+        'label'  => $op->name,
+        'group'  => $op->kind === 'in_house' ? 'In-house projects' : 'External projects',
+        'search' => strtolower($op->name),
+    ])->values()->all();
 
     $navLinks = $isExternal
         ? [
@@ -58,7 +84,8 @@
 @endphp
 
 <div x-data="{
-    showNewCollection: false,
+    showNewCollection: {{ old('_form') ? 'true' : 'false' }},
+    inflowMode: '{{ $initialInflowMode }}',
     showEdit: {{ session('openEdit') ? 'true' : 'false' }}
 }" class="space-y-4">
 
@@ -66,7 +93,7 @@
     @if (session('success'))
     <div class="rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm text-green-800">{{ session('success') }}</div>
     @endif
-    @if ($errors->any())
+    @if ($errors->any() && ! old('_form'))
     <div class="rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-800">
         <ul class="list-disc space-y-1 pl-5">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
     </div>
@@ -101,10 +128,12 @@
             </div>
 
             <div class="flex shrink-0 items-center gap-2">
+                @can('manage-financials')
                 <button type="button" @click="showNewCollection = true"
                     class="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white shadow ring-1 ring-emerald-700/20 hover:bg-emerald-700">
                     <i data-lucide="plus-circle" class="h-3.5 w-3.5"></i> {{ $inflowLabel }}
                 </button>
+                @endcan
                 <a href="{{ route('vouchers.index', ['project_id' => $project->id, 'new_voucher' => 1]) }}"
                     class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow ring-1 ring-red-700/20 hover:bg-red-700">
                     <i data-lucide="minus-circle" class="h-3.5 w-3.5"></i> Outflow
@@ -132,6 +161,11 @@
         <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
             <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ $totalInflowLabel }}</p>
             <p class="mt-0.5 text-sm font-bold tabular-nums text-green-700">₱{{ number_format($totalCollected, 2) }}</p>
+            @if ($isExternal && $borrowedTotal > 0)
+            <p class="mt-0.5 text-[10px] tabular-nums text-slate-400" title="Collections vs borrowed / project support">
+                ₱{{ number_format($clientCollected, 2) }} collected · ₱{{ number_format($borrowedTotal, 2) }} borrowed
+            </p>
+            @endif
         </div>
         <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
             <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Total outflow</p>
@@ -175,21 +209,66 @@
     </div>
 
     {{-- ════════════════════════════════════════════════════════════
-         RECORD INFLOW MODAL
+         RECORD INFLOW / FUNDING MODAL
+         External: client collection OR borrow / project support.
+         In-house: funding only — every inflow is money moved from
+         another account, booked as a Transfer so ledgers stay in sync.
     ════════════════════════════════════════════════════════════ --}}
+    @can('manage-financials')
     <div x-show="showNewCollection" x-cloak
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
          @keydown.escape.window="showNewCollection = false">
         <div @click.outside="showNewCollection = false"
-             class="w-full max-w-md rounded-2xl bg-white shadow-xl">
+             class="w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-xl" style="max-height:90vh">
             <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-                <h3 class="text-base font-semibold text-omet-navy">{{ $isExternal ? 'Record inflow / collection' : 'Record funding (loan disbursement)' }}</h3>
-                <button @click="showNewCollection = false" class="rounded p-1 text-gray-400 hover:text-gray-600">
+                <div>
+                    <h3 class="text-base font-semibold text-omet-navy">{{ $isExternal ? 'Record inflow' : 'Record funding' }}</h3>
+                    <p class="mt-0.5 text-[11px] text-slate-500">
+                        @if ($isExternal)
+                            Client payments and borrowed funds are tracked separately.
+                        @else
+                            Borrow from another account, or take support from another project.
+                        @endif
+                    </p>
+                </div>
+                <button @click="showNewCollection = false" class="rounded p-1 text-gray-400 hover:text-gray-600" aria-label="Close">
                     <i data-lucide="x" class="h-4 w-4"></i>
                 </button>
             </div>
-            <form method="POST" action="{{ route('projects.collections.store', $project) }}" class="space-y-4 px-6 py-5">
+
+            @if ($errors->any() && old('_form'))
+            <div class="mx-6 mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">
+                <ul class="list-disc space-y-0.5 pl-4">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul>
+            </div>
+            @endif
+
+            @if ($isExternal)
+            {{-- Inflow type selector --}}
+            <div class="grid grid-cols-2 gap-2 px-6 pt-4" role="group" aria-label="Inflow type">
+                <button type="button" @click="inflowMode = 'collection'"
+                    :class="inflowMode === 'collection' ? 'border-emerald-500 bg-emerald-50/60 ring-1 ring-emerald-500' : 'border-gray-200 hover:border-gray-300'"
+                    :aria-pressed="inflowMode === 'collection'"
+                    class="cursor-pointer rounded-lg border p-3 text-left transition-colors duration-150">
+                    <span class="flex items-center gap-1.5 text-[13px] font-semibold text-omet-navy">
+                        <i data-lucide="hand-coins" class="h-4 w-4 text-emerald-600"></i> Collection
+                    </span>
+                    <span class="mt-0.5 block text-[11px] leading-snug text-slate-500">Payment received from the client</span>
+                </button>
+                <button type="button" @click="inflowMode = 'funding'"
+                    :class="inflowMode === 'funding' ? 'border-indigo-500 bg-indigo-50/60 ring-1 ring-indigo-500' : 'border-gray-200 hover:border-gray-300'"
+                    :aria-pressed="inflowMode === 'funding'"
+                    class="cursor-pointer rounded-lg border p-3 text-left transition-colors duration-150">
+                    <span class="flex items-center gap-1.5 text-[13px] font-semibold text-omet-navy">
+                        <i data-lucide="arrow-left-right" class="h-4 w-4 text-indigo-600"></i> Borrow / support
+                    </span>
+                    <span class="mt-0.5 block text-[11px] leading-snug text-slate-500">Fund from another account or project</span>
+                </button>
+            </div>
+
+            {{-- Pane 1 · Client collection (external only) --}}
+            <form x-show="inflowMode === 'collection'" method="POST" action="{{ route('projects.collections.store', $project) }}" class="space-y-4 px-6 py-5">
                 @csrf
+                <input type="hidden" name="_form" value="collection">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
                         <x-label for="c_date" :value="__('Date received *')" />
@@ -200,25 +279,24 @@
                         <x-input id="c_amount" type="number" name="amount" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('amount')" min="0.01" step="0.01" required />
                     </div>
                     <div>
-                        <x-label for="c_ref" :value="__($isExternal ? 'Reference / OR no.' : 'Loan reference')" />
-                        <x-input id="c_ref" type="text" name="reference" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('reference')" placeholder="{{ $isExternal ? 'e.g. OR-1234' : 'e.g. BPI-LOAN-2026-001' }}" />
+                        <x-label for="c_ref" :value="__('Reference / OR no.')" />
+                        <x-input id="c_ref" type="text" name="reference" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('reference')" placeholder="e.g. OR-1234" />
                     </div>
                     <div>
-                        <x-label for="c_bank" :value="__($isExternal ? 'Deposited to' : 'Disbursed to account')" />
-                        <select id="c_bank" name="bank_account_id"
-                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
-                            <option value="">— {{ $isExternal ? 'none / not yet deposited' : 'select account' }} —</option>
-                            @foreach ($bankAccounts as $ba)
-                                <option value="{{ $ba->id }}" {{ old('bank_account_id') == $ba->id ? 'selected' : '' }}>
-                                    {{ $ba->name }} ({{ $ba->entity->name ?? '?' }})
-                                </option>
-                            @endforeach
-                        </select>
+                        <x-label for="c_bank" :value="__('Deposited to')" />
+                        <x-searchable-select
+                            id="c_bank"
+                            name="bank_account_id"
+                            :options="$bankAccountOptions"
+                            placeholder="— none / not yet deposited —"
+                            search-placeholder="Search accounts…"
+                            empty-text="No accounts found"
+                            clearable
+                        />
                     </div>
                     <div class="col-span-2">
-                        <x-label for="c_notes" :value="__($isExternal ? 'Notes' : 'Lender / notes')" />
+                        <x-label for="c_notes" :value="__('Notes')" />
                         <textarea id="c_notes" name="notes" rows="2"
-                            placeholder="{{ $isExternal ? '' : 'e.g. BPI · 5yr term · 8.25% p.a.' }}"
                             class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">{{ old('notes') }}</textarea>
                     </div>
                 </div>
@@ -226,11 +304,81 @@
                     <button type="button" @click="showNewCollection = false"
                         class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
                     <button type="submit"
-                        class="rounded-lg bg-omet-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-omet-lightblue">Save</button>
+                        class="rounded-lg bg-omet-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-omet-lightblue">Save collection</button>
+                </div>
+            </form>
+            @endif
+
+            {{-- Pane 2 · Borrow / support — the only pane for in-house --}}
+            <form @if ($isExternal) x-show="inflowMode === 'funding'" @endif
+                  method="POST" action="{{ route('projects.funding.store', $project) }}" class="space-y-4 px-6 py-5">
+                @csrf
+                <input type="hidden" name="_form" value="funding">
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="col-span-2">
+                        <x-label for="f_from" :value="__('From account *')" />
+                        <x-searchable-select
+                            id="f_from"
+                            name="from_account_id"
+                            :options="$bankAccountOptions"
+                            placeholder="— select source account —"
+                            search-placeholder="Search accounts…"
+                            empty-text="No accounts found"
+                        />
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="f_source_project" :value="__('Support from project (optional)')" />
+                        <x-searchable-select
+                            id="f_source_project"
+                            name="from_project_id"
+                            :options="$sourceProjectOptions"
+                            placeholder="— none · plain borrowing between accounts —"
+                            search-placeholder="Search projects…"
+                            empty-text="No other projects found"
+                            clearable
+                        />
+                        <p class="mt-1 text-[11px] text-gray-400">Same money movement either way — tagging a project also records the outflow on that project's books.</p>
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="f_to" :value="__('Deposited to *')" />
+                        <x-searchable-select
+                            id="f_to"
+                            name="to_account_id"
+                            :options="$bankAccountOptions"
+                            placeholder="— select receiving account —"
+                            search-placeholder="Search accounts…"
+                            empty-text="No accounts found"
+                        />
+                    </div>
+                    <div>
+                        <x-label for="f_date" :value="__('Date *')" />
+                        <x-input id="f_date" type="date" name="date" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('date', now()->toDateString())" required />
+                    </div>
+                    <div>
+                        <x-label for="f_amount" :value="__('Amount (PHP) *')" />
+                        <x-input id="f_amount" type="number" name="amount" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('amount')" min="0.01" step="0.01" required />
+                    </div>
+                    <div class="col-span-2">
+                        <x-label for="f_notes" :value="__('Notes')" />
+                        <textarea id="f_notes" name="notes" rows="2"
+                            placeholder="e.g. for payroll week 24 · to be returned"
+                            class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">{{ old('notes') }}</textarea>
+                    </div>
+                </div>
+                <p class="flex items-start gap-1.5 rounded-md bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-500">
+                    <i data-lucide="info" class="mt-0.5 h-3.5 w-3.5 shrink-0"></i>
+                    Recorded as a transfer: both bank ledgers and this project's books update together.
+                </p>
+                <div class="flex justify-end gap-2 pt-1">
+                    <button type="button" @click="showNewCollection = false"
+                        class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>
+                    <button type="submit"
+                        class="rounded-lg bg-omet-blue px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-omet-lightblue">Save funding</button>
                 </div>
             </form>
         </div>
     </div>
+    @endcan
 
 
     {{-- ════════════════════════════════════════════════════════════

@@ -74,7 +74,7 @@ class ReportController extends Controller
     {
         $filters = $this->parseFilters($request);
 
-        $query = ProjectExpense::with(['project', 'bankAccount.entity'])
+        $query = ProjectExpense::with(['project', 'bankAccount.entity', 'categoryRef.parent'])
             ->whereHas('project');
 
         if ($filters['date_from']) {
@@ -91,6 +91,9 @@ class ReportController extends Controller
                 $q->where('slug', $filters['entity'])->orWhere('id', $filters['entity']);
             });
         }
+        if ($filters['category_id']) {
+            $query->where('category_id', $filters['category_id']);
+        }
 
         $expenses = $query->orderBy('spent_on')->get();
 
@@ -98,10 +101,23 @@ class ReportController extends Controller
         $groups = $expenses->groupBy(fn ($e) => $e->project_id)
             ->map(function ($items) {
                 $project = $items->first()->project;
+
+                $categories = $items->groupBy(fn ($e) => $e->category_id ?? 'none')
+                    ->map(function ($catItems) {
+                        $first = $catItems->first();
+                        return (object) [
+                            'label'    => $first->categoryRef?->fullLabel() ?? ($first->category ?: 'Uncategorized'),
+                            'items'    => $catItems->values(),
+                            'subtotal' => (float) $catItems->sum(fn ($e) => (float) $e->amount),
+                        ];
+                    })
+                    ->values();
+
                 return (object) [
-                    'project'  => $project,
-                    'items'    => $items->values(),
-                    'subtotal' => (float) $items->sum(fn ($e) => (float) $e->amount),
+                    'project'    => $project,
+                    'items'      => $items->values(),
+                    'categories' => $categories,
+                    'subtotal'   => (float) $items->sum(fn ($e) => (float) $e->amount),
                 ];
             })
             ->values();
@@ -115,10 +131,11 @@ class ReportController extends Controller
                 'grand_total' => $grandTotal,
                 'row_count'   => $expenses->count(),
             ],
-            'filters'           => $filters,
-            'entities'          => $this->allEntities(),
-            'projectsForFilter' => $this->allProjects(),
-            'accountsForFilter' => $this->allAccounts(),
+            'filters'             => $filters,
+            'entities'            => $this->allEntities(),
+            'projectsForFilter'   => $this->allProjects(),
+            'accountsForFilter'   => $this->allAccounts(),
+            'categoriesForFilter' => \App\Models\ProjectCategory::selectOptions(),
         ]);
     }
 
@@ -398,22 +415,24 @@ class ReportController extends Controller
     private function parseFilters(Request $request): array
     {
         return [
-            'date_from'  => $request->filled('date_from') ? Carbon::parse($request->input('date_from'))->toDateString() : null,
-            'date_to'    => $request->filled('date_to')   ? Carbon::parse($request->input('date_to'))->toDateString()   : null,
-            'project_id' => $request->input('project_id') ?: null,
-            'entity'     => $request->input('entity') ?: null,
-            'account_id' => $request->input('account_id') ?: null,
+            'date_from'   => $request->filled('date_from') ? Carbon::parse($request->input('date_from'))->toDateString() : null,
+            'date_to'     => $request->filled('date_to')   ? Carbon::parse($request->input('date_to'))->toDateString()   : null,
+            'project_id'  => $request->input('project_id') ?: null,
+            'entity'      => $request->input('entity') ?: null,
+            'account_id'  => $request->input('account_id') ?: null,
+            'category_id' => $request->input('category_id') ?: null,
         ];
     }
 
     private function emptyFilters(): array
     {
         return [
-            'date_from'  => null,
-            'date_to'    => null,
-            'project_id' => null,
-            'entity'     => null,
-            'account_id' => null,
+            'date_from'   => null,
+            'date_to'     => null,
+            'project_id'  => null,
+            'entity'      => null,
+            'account_id'  => null,
+            'category_id' => null,
         ];
     }
 
@@ -456,7 +475,7 @@ class ReportController extends Controller
                             $g->project->name,
                             optional($e->spent_on)->format('Y-m-d'),
                             $e->description ?? '',
-                            $e->category ?? '',
+                            $e->categoryRef?->fullLabel() ?? $e->category ?? '',
                             number_format((float) $e->amount, 2, '.', ''),
                         ];
                     }

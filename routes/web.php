@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ProjectCategoryController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\TransferController;
@@ -42,6 +43,14 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{entitySlug}/{accountId}',           [AccountController::class, 'show'])->name('show');
     });
 
+    // Project categories — admin only
+    Route::prefix('categories')->name('categories.')->middleware('role:admin')->group(function () {
+        Route::get('/',              [ProjectCategoryController::class, 'index'])->name('index');
+        Route::post('/',             [ProjectCategoryController::class, 'store'])->name('store');
+        Route::put('/{category}',    [ProjectCategoryController::class, 'update'])->name('update');
+        Route::delete('/{category}', [ProjectCategoryController::class, 'destroy'])->name('destroy');
+    });
+
     // Projects — admin + CFO
     Route::prefix('projects')->name('projects.')->middleware('role:admin,cfo')->group(function () {
         Route::get('/',                                             [ProjectController::class, 'index'])->name('index');
@@ -61,6 +70,7 @@ Route::middleware(['auth'])->group(function () {
         Route::put('/{project}',                                    [ProjectController::class, 'update'])->name('update');
         Route::delete('/{project}',                                 [ProjectController::class, 'destroy'])->name('destroy');
         Route::post('/{project}/collections',                       [ProjectController::class, 'storeCollection'])->name('collections.store');
+        Route::post('/{project}/funding',                           [ProjectController::class, 'storeFunding'])->name('funding.store');
         Route::delete('/collections/{collection}',                  [ProjectController::class, 'destroyCollection'])->name('collections.destroy');
         Route::delete('/expenses/{expense}',                        [ProjectController::class, 'destroyExpense'])->name('expenses.destroy');
     });

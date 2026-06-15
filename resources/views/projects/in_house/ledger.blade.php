@@ -17,7 +17,7 @@
             'reference'   => $e->vendor_ref,
             'description' => $e->description,
             'account'     => $e->bankAccount?->name,
-            'category'    => $e->category,
+            'category'    => $e->categoryRef?->fullLabel() ?? $e->category,
             'amount'      => (float) $e->amount,
             'is_transfer' => $e->isFromTransfer(),
             'sort_key'    => optional($e->spent_on)->format('Y-m-d') . '-2-' . str_pad((string) $e->id, 8, '0', STR_PAD_LEFT),
@@ -30,7 +30,7 @@
 @endphp
 
 <x-app-layout :page-title="$project->name">
-    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono">
+    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono" :other-projects="$otherProjects">
 
         <div class="flex items-center justify-between gap-4 border-b border-gray-100 bg-slate-50/60 px-4 py-2">
             <div class="flex items-baseline gap-3">

@@ -26,8 +26,9 @@
         @endif
     </td>
     <td class="px-4 py-2.5">
-        @if ($e->category)
-            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-600">{{ $e->category }}</span>
+        @php $catLabel = $e->categoryRef?->fullLabel() ?? $e->category; @endphp
+        @if ($catLabel)
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium capitalize text-slate-600">{{ $catLabel }}</span>
         @else
             <span class="text-slate-300">—</span>
         @endif

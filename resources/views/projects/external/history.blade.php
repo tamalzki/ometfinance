@@ -1,5 +1,5 @@
 <x-app-layout :page-title="$project->name">
-    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono">
+    <x-project-shell :project="$project" :bank-accounts="$bankAccounts" :collections-chrono="$collectionsChrono" :other-projects="$otherProjects">
 
         <div class="flex items-center justify-between gap-4 border-b border-gray-100 bg-slate-50/60 px-4 py-2">
             <div class="flex items-baseline gap-3">

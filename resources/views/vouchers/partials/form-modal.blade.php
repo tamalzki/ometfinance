@@ -181,7 +181,36 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                {{-- Category combobox --}}
+                <div class="relative" @click.outside="categoryOpen = false">
+                    <label class="mb-1 block text-[11px] font-medium text-gray-600">Category *</label>
+                    <button type="button"
+                            @click="categoryOpen = !categoryOpen; if (categoryOpen) $nextTick(() => $refs.categorySearch?.focus())"
+                            class="flex h-10 w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-3 text-left text-[13px] text-gray-800 outline-none transition hover:border-slate-300 focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
+                        <span class="min-w-0 flex-1 truncate" x-text="categoryLabel(f.category_id)"></span>
+                        <i data-lucide="chevron-down" class="h-4 w-4 shrink-0 text-gray-400"></i>
+                    </button>
+                    <input type="hidden" name="category_id" :value="f.category_id" required>
+                    <div x-show="categoryOpen" x-cloak
+                         class="absolute left-0 right-0 z-30 mt-1 max-h-72 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+                        <div class="border-b border-slate-100 p-2">
+                            <input x-ref="categorySearch" x-model="categoryQuery" type="text" placeholder="Search category…"
+                                   class="h-8 w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 text-[12px] outline-none focus:border-omet-blue focus:bg-white">
+                        </div>
+                        <div class="max-h-56 overflow-y-auto py-1">
+                            <template x-for="c in filteredOptions(categories, categoryQuery)" :key="c.id">
+                                <button type="button" @click="f.category_id = String(c.id); categoryOpen = false; categoryQuery = ''"
+                                        class="flex w-full px-3 py-2 text-left text-[12px] hover:bg-blue-50"
+                                        :class="String(c.id) === String(f.category_id) ? 'bg-blue-50/60 font-medium text-omet-blue' : 'text-gray-700'">
+                                    <span class="block truncate" x-text="c.label"></span>
+                                </button>
+                            </template>
+                            <p x-show="filteredOptions(categories, categoryQuery).length === 0" class="px-3 py-3 text-center text-[11px] text-gray-400">No categories match.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
                     {{-- Type combobox --}}
                     <div class="relative" @click.outside="typeOpen = false">
                         <label class="mb-1 block text-[11px] font-medium text-gray-600">Type</label>

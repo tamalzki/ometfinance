@@ -106,6 +106,21 @@
                 </div>
             @endif
 
+            @if ($activeTab === 'cash-outflow')
+                <div>
+                    <label class="block text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Category</label>
+                    <select name="category_id"
+                            class="mt-1 h-9 min-w-[12rem] rounded-md border border-slate-200 bg-white px-2 text-[12.5px] text-slate-700 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
+                        <option value="">All categories</option>
+                        @foreach ($categoriesForFilter as $c)
+                            <option value="{{ $c['id'] }}" {{ (string) $filters['category_id'] === (string) $c['id'] ? 'selected' : '' }}>
+                                {{ $c['label'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+
             @if ($activeTab === 'transfers')
                 <div>
                     <label class="block text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Account</label>
@@ -168,6 +183,7 @@
                 <input type="hidden" name="project_id" value="{{ $filters['project_id'] }}">
                 <input type="hidden" name="entity"     value="{{ $filters['entity'] }}">
                 <input type="hidden" name="account_id" value="{{ $filters['account_id'] }}">
+                <input type="hidden" name="category_id" value="{{ $filters['category_id'] }}">
                 <button type="submit"
                         class="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[12px] font-medium text-slate-600 hover:bg-slate-50">
                     <i data-lucide="file-down" class="h-3.5 w-3.5"></i>
@@ -182,6 +198,7 @@
                 <input type="hidden" name="project_id" value="{{ $filters['project_id'] }}">
                 <input type="hidden" name="entity"     value="{{ $filters['entity'] }}">
                 <input type="hidden" name="account_id" value="{{ $filters['account_id'] }}">
+                <input type="hidden" name="category_id" value="{{ $filters['category_id'] }}">
                 <button type="submit"
                         class="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[12px] font-medium text-slate-600 hover:bg-slate-50">
                     <i data-lucide="file-spreadsheet" class="h-3.5 w-3.5"></i>
@@ -255,12 +272,18 @@
                                     {{ $g->project->name }}{{ $g->project->kind === 'in_house' ? ' (in-house)' : '' }}
                                 </td>
                             </tr>
-                            @foreach ($g->items as $e)
-                                <tr class="hover:bg-slate-50/70 {{ $loop->even ? 'bg-slate-50/30' : '' }}">
-                                    <td class="tabular-nums text-slate-600 whitespace-nowrap">{{ $e->spent_on->format('M j, Y') }}</td>
-                                    <td class="text-slate-700">{{ $e->description ?: '—' }}</td>
-                                    <td class="capitalize text-slate-500">{{ $e->category ?: '—' }}</td>
-                                    <td class="text-right font-semibold tabular-nums text-red-600">{{ $fmt($e->amount) }}</td>
+                            @foreach ($g->categories as $cg)
+                                @foreach ($cg->items as $e)
+                                    <tr class="hover:bg-slate-50/70 {{ $loop->even ? 'bg-slate-50/30' : '' }}">
+                                        <td class="tabular-nums text-slate-600 whitespace-nowrap">{{ $e->spent_on->format('M j, Y') }}</td>
+                                        <td class="text-slate-700">{{ $e->description ?: '—' }}</td>
+                                        <td class="text-slate-500">{{ $e->categoryRef?->fullLabel() ?? $e->category ?: '—' }}</td>
+                                        <td class="text-right font-semibold tabular-nums text-red-600">{{ $fmt($e->amount) }}</td>
+                                    </tr>
+                                @endforeach
+                                <tr class="bg-slate-50/60 font-semibold">
+                                    <td colspan="3" class="text-right text-[10.5px] uppercase tracking-wide text-slate-500">Subtotal — {{ $cg->label }}</td>
+                                    <td class="text-right tabular-nums text-slate-600">{{ $fmt($cg->subtotal) }}</td>
                                 </tr>
                             @endforeach
                             <tr class="bg-amber-50/60 font-bold">

@@ -56,7 +56,7 @@ class Voucher extends Model
     protected $fillable = [
         'voucher_no', 'voucher_date', 'due_date', 'release_date',
         'payee_name', 'project_id', 'source_bank_account_id',
-        'transaction_type', 'reference', 'amount_payable',
+        'transaction_type', 'category_id', 'reference', 'amount_payable',
         'mode_of_payment', 'status', 'particular', 'notes',
         'remarks', 'source_of_fund', 'or_ref', 'change_amount',
     ];
@@ -85,6 +85,11 @@ class Voucher extends Model
     public function sourceBankAccount(): BelongsTo
     {
         return $this->belongsTo(BankAccount::class, 'source_bank_account_id');
+    }
+
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(ProjectCategory::class, 'category_id');
     }
 
     public function payments(): HasMany

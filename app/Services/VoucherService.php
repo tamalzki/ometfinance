@@ -174,6 +174,7 @@ class VoucherService
             'description'     => sprintf('Voucher %s — %s', $voucher->voucher_no, $voucher->payee_name),
             'vendor_ref'      => $voucher->voucher_no,
             'category'        => $voucher->typeLabel(),
+            'category_id'     => $voucher->category_id,
         ];
 
         if ($voucher->projectExpense) {

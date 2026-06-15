@@ -5,6 +5,7 @@
             'links' => [
                 ['name' => 'Dashboard', 'route' => 'dashboard',      'icon' => 'layout-dashboard'],
                 ['name' => 'Accounts',  'route' => 'accounts.index', 'icon' => 'landmark', 'pattern' => 'accounts.*'],
+                ['name' => 'Categories', 'route' => 'categories.index', 'icon' => 'tags', 'pattern' => 'categories.*'],
             ],
         ],
         [
@@ -15,8 +16,8 @@
                 'pattern' => 'projects.*',
             ],
             'links' => [
-                ['name' => 'External Projects', 'route' => 'projects.external', 'icon' => 'folder-open', 'pattern' => 'projects.external|projects.show*'],
-                ['name' => 'In-house Projects', 'route' => 'projects.in_house', 'icon' => 'building-2',  'pattern' => 'projects.in_house'],
+                ['name' => 'External Projects', 'route' => 'projects.external', 'icon' => 'folder-open', 'pattern' => 'projects.external', 'showKind' => 'external'],
+                ['name' => 'In-house Projects', 'route' => 'projects.in_house', 'icon' => 'building-2',  'pattern' => 'projects.in_house', 'showKind' => 'in_house'],
             ],
         ],
         [
@@ -40,12 +41,20 @@
         ],
     ];
 
-    $isLinkActive = static function (array $link): bool {
+    // On project detail pages (projects.show.*), the route name alone doesn't
+    // tell us whether the project is external or in-house — check the bound model.
+    $currentProject     = request()->route('project');
+    $currentProjectKind = $currentProject instanceof \App\Models\Project ? $currentProject->kind : null;
+
+    $isLinkActive = function (array $link) use ($currentProjectKind): bool {
         $patterns = isset($link['pattern']) ? explode('|', $link['pattern']) : [$link['route']];
         foreach ($patterns as $p) {
             if (request()->routeIs($p)) {
                 return true;
             }
+        }
+        if (isset($link['showKind']) && request()->routeIs('projects.show*') && $currentProjectKind === $link['showKind']) {
+            return true;
         }
         return false;
     };
