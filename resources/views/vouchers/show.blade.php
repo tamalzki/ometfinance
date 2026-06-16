@@ -310,15 +310,54 @@
             <p class="mb-2 text-[11px] font-medium text-red-600">{{ $message }}</p>
         @enderror
 
-        <form method="POST" enctype="multipart/form-data" action="{{ route('vouchers.attachments.store', $voucher) }}" class="flex items-center gap-2">
-            @csrf
-            <input type="file" name="file" required
-                   class="block w-full flex-1 text-[12px] text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-omet-blue/10 file:px-3 file:py-1.5 file:text-[11.5px] file:font-semibold file:text-omet-blue hover:file:bg-omet-blue/20">
-            <button type="submit" class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-omet-blue px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue">
-                <i data-lucide="upload" class="h-3.5 w-3.5"></i> Upload
-            </button>
-        </form>
-        <p class="mt-1 text-[10.5px] text-slate-400">PDF, image, Word or Excel files up to 10 MB — invoices, ORs, signed checks, approval slips.</p>
+        <div x-data="{ fileError: '', checkFile(input) {
+            const f = input.files[0];
+            if (f && f.size > 10 * 1024 * 1024) {
+                this.fileError = f.name;
+                input.value = '';
+            } else {
+                this.fileError = '';
+            }
+        } }">
+            <form method="POST" enctype="multipart/form-data" action="{{ route('vouchers.attachments.store', $voucher) }}"
+                  class="flex items-center gap-2"
+                  @submit.prevent="if (fileError) { return; } $el.submit()">
+                @csrf
+                <input type="file" name="file" required
+                       @change="checkFile($event.target)"
+                       class="block w-full flex-1 text-[12px] text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-omet-blue/10 file:px-3 file:py-1.5 file:text-[11.5px] file:font-semibold file:text-omet-blue hover:file:bg-omet-blue/20">
+                <button type="submit" :disabled="!!fileError"
+                        class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-omet-blue px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue disabled:cursor-not-allowed disabled:opacity-50">
+                    <i data-lucide="upload" class="h-3.5 w-3.5"></i> Upload
+                </button>
+            </form>
+            <p class="mt-1 text-[10.5px] text-slate-400">PDF, image, Word or Excel files up to 10 MB — invoices, ORs, signed checks, approval slips.</p>
+
+            {{-- Error modal --}}
+            <div x-show="fileError" x-cloak
+                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+                <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+                    <div class="flex items-start gap-3">
+                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100">
+                            <i data-lucide="alert-circle" class="h-5 w-5 text-red-600"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-[14px] font-semibold text-slate-800">File too large</h3>
+                            <p class="mt-1 text-[12.5px] text-slate-600">
+                                <span class="font-medium" x-text="fileError"></span> exceeds the 10 MB limit.
+                                Please compress the file or split it into smaller parts before uploading.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="mt-5 flex justify-end">
+                        <button @click="fileError = ''" type="button"
+                                class="rounded-lg bg-omet-blue px-5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-omet-lightblue">
+                            OK
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
 </div>
