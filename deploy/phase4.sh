@@ -52,7 +52,15 @@ else
   echo "   scp Onemark-Davao-Daily-Issuances-2026.xlsx root@<droplet>:${APP_DIR}/"
 fi
 
-# 4. Rebuild caches
+# 4. Import historical daily transactions (idempotent — skips existing voucher numbers)
+echo "== Importing daily transactions =="
+sudo -u www-data php artisan db:seed --class=DailyTransactionsImportSeeder --force
+
+# 5. Link vouchers to projects from the spreadsheet (only updates project_id)
+echo "== Linking vouchers to projects =="
+sudo -u www-data php artisan vouchers:link-projects --excel
+
+# 6. Rebuild caches
 sudo -u www-data php artisan config:cache
 sudo -u www-data php artisan route:cache
 sudo -u www-data php artisan view:cache

@@ -407,12 +407,6 @@
                     <input type="file" name="attachments[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
                            @change="validateAttachments($event.target)"
                            class="mt-3 block w-full cursor-pointer text-[12px] text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-omet-blue file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-white hover:file:bg-omet-lightblue">
-                    <template x-if="attachmentError">
-                        <p class="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-red-600">
-                            <i data-lucide="alert-circle" class="h-3.5 w-3.5 shrink-0"></i>
-                            <span x-text="attachmentError"></span>
-                        </p>
-                    </template>
                 </div>
             </div>
 
@@ -425,5 +419,30 @@
                 </button>
             </div>
         </form>
+    </div>
+
+    {{-- Attachment size error modal --}}
+    <div x-show="attachmentError" x-cloak
+         class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+        <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+            <div class="flex items-start gap-3">
+                <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100">
+                    <i data-lucide="alert-circle" class="h-5 w-5 text-red-600"></i>
+                </div>
+                <div>
+                    <h3 class="text-[14px] font-semibold text-slate-800">File too large</h3>
+                    <p class="mt-1 text-[12.5px] text-slate-600">
+                        <span class="font-medium" x-text="attachmentError"></span>
+                        exceeds the 10 MB limit. Please compress or split the file before uploading.
+                    </p>
+                </div>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button @click="attachmentError = ''" type="button"
+                        class="rounded-lg bg-omet-blue px-5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-omet-lightblue">
+                    OK
+                </button>
+            </div>
+        </div>
     </div>
 </div>

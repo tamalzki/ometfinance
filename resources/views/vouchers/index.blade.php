@@ -234,7 +234,7 @@ document.addEventListener('alpine:init', () => {
             const files = Array.from(input.files || []);
             const oversized = files.filter(f => f.size > maxBytes).map(f => f.name);
             if (oversized.length) {
-                this.attachmentError = 'Too large (max 10 MB each): ' + oversized.join(', ');
+                this.attachmentError = oversized.join(', ');
                 input.value = '';
             } else {
                 this.attachmentError = '';

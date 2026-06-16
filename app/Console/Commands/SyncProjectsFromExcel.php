@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Project;
 use App\Models\Voucher;
+use App\Support\DailyTransactionProjectResolver;
 use Illuminate\Console\Command;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
@@ -11,13 +12,7 @@ class SyncProjectsFromExcel extends Command
 {
     protected $signature = 'projects:sync-from-excel';
 
-    protected $description = 'Create projects from the Excel "Project" filter column (names containing "Admin" = in-house, others = external) and re-link voucher project_id values';
-
-    // Normalizes whitespace variants of the same project name to one canonical form.
-    private const NAME_ALIASES = [
-        'admin -logistics' => 'Admin - Logistics',
-        'admin- logistics' => 'Admin - Logistics',
-    ];
+    protected $description = 'Create projects from the Excel "Project" column (names containing "Admin" = in-house, others = external) and re-link voucher project_id values';
 
     public function handle(): int
     {
@@ -44,26 +39,27 @@ class SyncProjectsFromExcel extends Command
                 continue;
             }
 
-            $raw = trim((string) $sheet->getCellByColumnAndRow(7, $row)->getValue());
-            if ($raw === '') {
+            $canonical = DailyTransactionProjectResolver::canonicalName(
+                trim((string) $sheet->getCellByColumnAndRow(7, $row)->getValue())
+            );
+
+            if ($canonical === null) {
                 continue;
             }
 
-            $canonical = self::NAME_ALIASES[strtolower($raw)] ?? $raw;
             $rowProjects[$cvNo] = $canonical;
             $names[$canonical]  = true;
         }
 
-        // ── Build existing project map (exact, case-insensitive) ──────────
-        $existingByName = Project::all()->mapWithKeys(
-            fn ($p) => [strtolower(trim($p->name)) => $p->id]
-        )->toArray();
+        DailyTransactionProjectResolver::forgetCache();
+        $existingByName = DailyTransactionProjectResolver::projectMap(true);
 
         // ── Create missing projects, classified by "Admin" keyword ────────
         $created = 0;
         foreach (array_keys($names) as $name) {
-            $key = strtolower($name);
-            if (isset($existingByName[$key])) {
+            $key = DailyTransactionProjectResolver::normalizeKey($name);
+
+            if ($key === null || isset($existingByName[$key])) {
                 continue;
             }
 
@@ -81,12 +77,17 @@ class SyncProjectsFromExcel extends Command
             $created++;
         }
 
+        DailyTransactionProjectResolver::forgetCache();
         $this->info("Created {$created} new project(s).");
 
         // ── Re-link voucher project_id from canonical names ────────────────
         $updated = 0;
+        $projectMap = DailyTransactionProjectResolver::projectMap(true);
+
         foreach ($rowProjects as $voucherNo => $canonical) {
-            $projectId = $existingByName[strtolower($canonical)] ?? null;
+            $key       = DailyTransactionProjectResolver::normalizeKey($canonical);
+            $projectId = $key ? ($projectMap[$key] ?? null) : null;
+
             if ($projectId === null) {
                 continue;
             }
