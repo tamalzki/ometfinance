@@ -88,9 +88,13 @@ class VoucherController extends Controller
         $voucher->load(['project', 'sourceBankAccount.entity', 'category.parent', 'payments.bankAccount', 'attachments']);
 
         return view('vouchers.show', [
-            'voucher'  => $voucher,
-            'accounts' => $this->accountsForPicker(),
-            'modes'    => Voucher::MODES,
+            'voucher'            => $voucher,
+            'accounts'           => $this->accountsForPicker(),
+            'projects'           => $this->projectsForPicker(),
+            'payees'             => $this->payeesForPicker(),
+            'categoriesForPicker' => \App\Models\ProjectCategory::selectOptions(),
+            'types'              => Voucher::TYPES,
+            'modes'              => Voucher::MODES,
         ]);
     }
 

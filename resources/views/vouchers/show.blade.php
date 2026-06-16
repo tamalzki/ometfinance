@@ -14,9 +14,199 @@
     $amountPaid = $voucher->amountPaid();
     $balance    = $voucher->balanceDue();
     $overdue    = $voucher->isOverdue();
+
+    $accountsForPicker = $accounts->map(fn ($a) => [
+        'id'     => $a->id,
+        'label'  => ($a->entity?->name ? $a->entity->name . ' — ' : '') . $a->name,
+        'search' => strtolower(implode(' ', array_filter([
+            $a->entity?->name, $a->name, $a->bank_name, (string) ($a->account_number ?? ''),
+        ]))),
+    ])->values();
+
+    $projectsForPicker = $projects->map(fn ($p) => [
+        'id'     => $p->id,
+        'label'  => $p->name . ($p->code ? ' (' . $p->code . ')' : ''),
+        'kind'   => $p->kind === 'in_house' ? 'In-house' : 'External',
+        'search' => strtolower(implode(' ', array_filter([
+            $p->name, $p->code, $p->client_name, $p->kind === 'in_house' ? 'in-house' : 'external',
+        ]))),
+    ])->values();
+
+    $payeesForPicker = $payees->map(fn ($name) => [
+        'id'     => $name,
+        'label'  => $name,
+        'search' => strtolower($name),
+    ])->values();
+
+    $typesForPicker = collect($types)->map(fn ($label, $key) => [
+        'id'     => $key,
+        'label'  => $label,
+        'search' => strtolower($key . ' ' . $label),
+    ])->values();
+
+    $modesForPicker = collect($modes)->map(fn ($label, $key) => [
+        'id'     => $key,
+        'label'  => $label,
+        'search' => strtolower($key . ' ' . $label),
+    ])->values();
+
+    $voucherPayload = [
+        'id'                     => $voucher->id,
+        'voucher_no'             => $voucher->voucher_no,
+        'voucher_date'           => $voucher->voucher_date->format('Y-m-d'),
+        'due_date'               => $voucher->due_date?->format('Y-m-d'),
+        'release_date'           => $voucher->release_date?->format('Y-m-d'),
+        'payee_name'             => $voucher->payee_name,
+        'project_id'             => $voucher->project_id,
+        'source_bank_account_id' => $voucher->source_bank_account_id,
+        'transaction_type'       => $voucher->transaction_type,
+        'category_id'            => $voucher->category_id,
+        'po_number'              => $voucher->po_number,
+        'reference'              => $voucher->reference,
+        'amount_payable'         => (float) $voucher->amount_payable,
+        'mode_of_payment'        => $voucher->mode_of_payment,
+        'status'                 => $voucher->status,
+        'particular'             => $voucher->particular,
+        'remarks'                => $voucher->remarks,
+        'source_of_fund'         => $voucher->source_of_fund,
+        'or_ref'                 => $voucher->or_ref,
+        'change_amount'          => (float) ($voucher->change_amount ?? 0),
+        'notes'                  => $voucher->notes,
+        'balance'                => $balance,
+        'has_payments'           => $voucher->payments->isNotEmpty(),
+        'attachments'            => $voucher->attachments->map(fn ($a) => [
+            'id'   => $a->id,
+            'name' => $a->original_name,
+            'size' => $a->humanSize(),
+        ])->values(),
+    ];
 @endphp
 
-<div class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto pb-4">
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('vouchersPage', () => ({
+        showForm: false,
+        editId: null,
+        lockedFields: false,
+        payeeOther: false,
+
+        projects: @json($projectsForPicker),
+        accounts: @json($accountsForPicker),
+        types: @json($typesForPicker),
+        modes: @json($modesForPicker),
+        payees: @json($payeesForPicker),
+        categories: @json($categoriesForPicker),
+        statuses: @json(\App\Models\Voucher::STATUSES),
+
+        projOpen: false, projQuery: '',
+        acctOpen: false, acctQuery: '',
+        typeOpen: false, typeQuery: '',
+        modeOpen: false, modeQuery: '',
+        payeeOpen: false, payeeQuery: '',
+        categoryOpen: false, categoryQuery: '',
+
+        f: {},
+        attachmentError: '',
+
+        closeFormCombos() {
+            this.projOpen = false; this.acctOpen = false;
+            this.typeOpen = false; this.modeOpen = false;
+            this.payeeOpen = false; this.categoryOpen = false;
+            this.projQuery = ''; this.acctQuery = '';
+            this.typeQuery = ''; this.modeQuery = '';
+            this.payeeQuery = ''; this.categoryQuery = '';
+        },
+        filteredOptions(list, query) {
+            const needle = (query || '').trim().toLowerCase();
+            if (! needle) return list;
+            return list.filter(o => (o.search || o.label || '').toLowerCase().includes(needle));
+        },
+        projectLabel(id) {
+            if (! id) return '— none —';
+            const p = this.projects.find(x => String(x.id) === String(id));
+            return p ? p.label : '— none —';
+        },
+        accountLabel(id) {
+            if (! id) return 'Pending — source not yet confirmed';
+            const a = this.accounts.find(x => String(x.id) === String(id));
+            return a ? a.label : 'Pending — source not yet confirmed';
+        },
+        typeLabel(id) {
+            const t = this.types.find(x => x.id === id);
+            return t ? t.label : '— select type —';
+        },
+        modeLabel(id) {
+            const m = this.modes.find(x => x.id === id);
+            return m ? m.label : '— select mode —';
+        },
+        categoryLabel(id) {
+            if (! id) return '— select category —';
+            const c = this.categories.find(x => String(x.id) === String(id));
+            return c ? c.label : '— select category —';
+        },
+        statusLabel(status) {
+            return this.statuses[status] || status;
+        },
+        get alreadyPaid() { return this.f.payment_status === 'paid'; },
+        get isCancelled() { return this.f.voucher_status === 'cancelled'; },
+        get hasPartialPayment() { return ['partial', 'pdc'].includes(this.f.voucher_status); },
+        formatPeso(n) {
+            return '₱' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        },
+        openEdit(v) {
+            this.editId = v.id;
+            this.lockedFields = !!v.has_payments;
+            this.payeeOther = !!v.payee_name && ! this.payees.some(p => p.label === v.payee_name);
+            this.closeFormCombos();
+            this.f = {
+                voucher_no: v.voucher_no,
+                voucher_date: v.voucher_date,
+                due_date: v.due_date || '',
+                release_date: v.release_date || '',
+                payee_name: v.payee_name,
+                project_id: v.project_id ? String(v.project_id) : '',
+                source_bank_account_id: v.source_bank_account_id ? String(v.source_bank_account_id) : '',
+                transaction_type: v.transaction_type || 'rfp',
+                category_id: v.category_id ? String(v.category_id) : '',
+                po_number: v.po_number || '',
+                reference: v.reference || '',
+                amount_payable: String(v.amount_payable),
+                mode_of_payment: v.mode_of_payment || 'cash',
+                particular: v.particular || '',
+                remarks: v.remarks || '',
+                source_of_fund: v.source_of_fund || '',
+                or_ref: v.or_ref || '',
+                change_amount: v.change_amount ? String(v.change_amount) : '',
+                notes: v.notes || '',
+                payment_status: v.status === 'paid' ? 'paid' : 'unpaid',
+                voucher_status: v.status || '',
+                balance_due: v.balance ?? 0,
+                attachments: v.attachments || [],
+            };
+            this.showForm = true;
+        },
+        validateAttachments(input) {
+            const maxBytes = 10 * 1024 * 1024;
+            const files = Array.from(input.files || []);
+            const oversized = files.filter(f => f.size > maxBytes).map(f => f.name);
+            if (oversized.length) {
+                this.attachmentError = oversized.join(', ');
+                input.value = '';
+            } else {
+                this.attachmentError = '';
+            }
+        },
+        closeForm() {
+            this.showForm = false;
+            this.editId = null;
+            this.attachmentError = '';
+            this.closeFormCombos();
+        },
+    }));
+});
+</script>
+
+<div x-data="vouchersPage" class="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-y-auto pb-4">
 
     {{-- ── Back link ───────────────────────────────────────────────────── --}}
     <a href="{{ route('vouchers.index') }}" class="inline-flex w-fit items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-omet-blue">
@@ -51,6 +241,13 @@
                     <span>Voucher date {{ $voucher->voucher_date->format('M d, Y') }}</span>
                     @if ($voucher->due_date)<span>· Due {{ $voucher->due_date->format('M d, Y') }}</span>@endif
                 </p>
+            </div>
+            <div class="flex flex-wrap items-start gap-3">
+                <button type="button"
+                        @click="openEdit({{ \Illuminate\Support\Js::from($voucherPayload) }})"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
+                    <i data-lucide="pencil" class="h-3.5 w-3.5"></i> Edit
+                </button>
             </div>
             <div class="flex flex-wrap gap-4 text-right">
                 <div>
@@ -359,6 +556,8 @@
             </div>
         </div>
     </div>
+
+@include('vouchers.partials.form-modal')
 
 </div>
 </x-app-layout>

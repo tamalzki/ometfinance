@@ -354,18 +354,7 @@ document.addEventListener('alpine:init', () => {
             </select>
             <i data-lucide="chevron-down" class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"></i>
         </div>
-        {{-- Type select with aligned custom arrow --}}
-        <div class="relative">
-            <select name="type" onchange="this.form.submit()"
-                    class="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-[12px] text-slate-700 shadow-sm outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
-                <option value="">All types</option>
-                @foreach ($types as $k => $label)
-                    <option value="{{ $k }}" @selected($activeType === $k)>{{ $label }}</option>
-                @endforeach
-            </select>
-            <i data-lucide="chevron-down" class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"></i>
-        </div>
-        @if ($activeStatus || $activeType)
+        @if ($activeStatus)
             <a href="{{ route('vouchers.index') }}" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700">
                 <i data-lucide="x" class="h-3 w-3"></i> Clear
             </a>
@@ -382,10 +371,7 @@ document.addEventListener('alpine:init', () => {
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[96px]">Date</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[96px]">Due</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Payee / Particular</th>
-                <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[100px]">PO No.</th>
-                <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[100px]">Ref</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Project</th>
-                <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[110px]">Type</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[120px]">Debit</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[120px]">Credit</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 w-[120px]">Net</th>
@@ -441,18 +427,11 @@ document.addEventListener('alpine:init', () => {
                             <p class="mt-0.5 max-w-[220px] truncate text-[11px] text-slate-400">{{ $v->particular }}</p>
                         @endif
                     </td>
-                    <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[11.5px] text-slate-500 whitespace-nowrap">
-                        {{ $v->po_number ?? '—' }}
-                    </td>
-                    <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[11.5px] text-slate-500 whitespace-nowrap">
-                        {{ $v->reference ?? '—' }}
-                    </td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[12.5px] text-slate-600">
                         @if ($v->project)
                             <a href="{{ route('projects.show', $v->project) }}" @click.stop class="text-[12px] font-medium text-omet-blue hover:underline">{{ $v->project->name }}</a>
                         @else <span class="text-slate-300">—</span> @endif
                     </td>
-                    <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[12px] text-slate-600">{{ $v->typeLabel() }}</td>
                     {{-- Debit = amount approved/payable --}}
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-right text-[12.5px] font-semibold tabular-nums text-omet-navy whitespace-nowrap">{{ $peso($v->amount_payable) }}</td>
                     {{-- Credit = total paid out --}}
@@ -504,7 +483,7 @@ document.addEventListener('alpine:init', () => {
                 </tr>
             @empty
                 <tr>
-                    <td colspan="13" class="px-6 py-14 text-center">
+                    <td colspan="10" class="px-6 py-14 text-center">
                         <i data-lucide="receipt" class="mx-auto mb-2 h-8 w-8 text-slate-200"></i>
                         <p class="text-xs text-slate-400">No transactions yet. Use <span class="font-semibold text-omet-blue">Add Voucher</span>.</p>
                     </td>
