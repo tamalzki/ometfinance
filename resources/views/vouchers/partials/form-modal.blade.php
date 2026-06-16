@@ -4,7 +4,8 @@
      @keydown.escape.window="closeForm()">
     <div class="w-full max-w-2xl rounded-2xl bg-white shadow-2xl" @click.outside="closeForm()">
         <form method="POST" enctype="multipart/form-data" class="flex max-h-[90vh] flex-col"
-              x-bind:action="editId ? '{{ url('/vouchers') }}/' + editId : '{{ route('vouchers.store') }}'">
+              x-bind:action="editId ? '{{ url('/vouchers') }}/' + editId : '{{ route('vouchers.store') }}'"
+              @submit.prevent="if (attachmentError) { return; } $el.submit()">
             @csrf
             <template x-if="editId">
                 <div>
@@ -404,13 +405,21 @@
                     </template>
 
                     <input type="file" name="attachments[]" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
+                           @change="validateAttachments($event.target)"
                            class="mt-3 block w-full cursor-pointer text-[12px] text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-omet-blue file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-white hover:file:bg-omet-lightblue">
+                    <template x-if="attachmentError">
+                        <p class="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-red-600">
+                            <i data-lucide="alert-circle" class="h-3.5 w-3.5 shrink-0"></i>
+                            <span x-text="attachmentError"></span>
+                        </p>
+                    </template>
                 </div>
             </div>
 
             <div class="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50/50 px-6 py-3">
                 <button type="button" @click="closeForm()" class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12.5px] font-semibold text-gray-600 transition hover:bg-gray-50">Cancel</button>
-                <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-omet-blue px-5 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue">
+                <button type="submit" :disabled="!!attachmentError"
+                        class="inline-flex items-center gap-2 rounded-lg bg-omet-blue px-5 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue disabled:cursor-not-allowed disabled:opacity-50">
                     <i data-lucide="check" class="h-3.5 w-3.5"></i>
                     <span x-text="editId ? 'Save changes' : 'Create voucher'"></span>
                 </button>

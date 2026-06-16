@@ -228,7 +228,24 @@ document.addEventListener('alpine:init', () => {
             };
             this.showPay = true;
         },
-        closeForm() { this.showForm = false; this.editId = null; this.closeFormCombos(); },
+        attachmentError: '',
+        validateAttachments(input) {
+            const maxBytes = 10 * 1024 * 1024;
+            const files = Array.from(input.files || []);
+            const oversized = files.filter(f => f.size > maxBytes).map(f => f.name);
+            if (oversized.length) {
+                this.attachmentError = 'Too large (max 10 MB each): ' + oversized.join(', ');
+                input.value = '';
+            } else {
+                this.attachmentError = '';
+            }
+        },
+        closeForm() {
+            this.showForm = false;
+            this.editId = null;
+            this.attachmentError = '';
+            this.closeFormCombos();
+        },
         closePay() { this.showPay = false; },
     }));
 });
