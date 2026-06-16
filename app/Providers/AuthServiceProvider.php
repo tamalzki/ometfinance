@@ -42,7 +42,7 @@ class AuthServiceProvider extends ServiceProvider
             }
             // Future role hook: prefer an explicit 'admin' role when present.
             if (property_exists($user, 'role') || isset($user->role)) {
-                return $user->role === null || $user->role === 'admin';
+                return in_array($user->role, [null, 'admin', 'cfo'], true);
             }
             return true;
         });

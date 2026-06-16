@@ -262,6 +262,8 @@ class ProjectController extends Controller
 
         $project->update($validated);
 
+        $project->ensureDefaultExternalAllocationLines();
+
         return redirect()->route('projects.show', $project)
             ->with('success', 'Project updated.');
     }
