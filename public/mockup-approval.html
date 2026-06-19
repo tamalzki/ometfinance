@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMET — CFO Approval Mockup</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                'omet-blue':      '#1D4ED8',
+                'omet-lightblue': '#2563EB',
+                'omet-navy':      '#1E3A5F',
+            }
+        }
+    }
+}
+</script>
+<style>
+    [x-cloak] { display: none !important; }
+    body { font-family: 'Inter', ui-sans-serif, system-ui, sans-serif; background: #f8fafc; }
+</style>
+</head>
+<body class="min-h-screen bg-slate-100 p-6">
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     NAV LABEL
+════════════════════════════════════════════════════════════════════════ -->
+<div class="mb-8 flex items-center gap-3">
+    <span class="rounded-full bg-omet-blue px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-white">OMET</span>
+    <span class="text-[13px] font-semibold text-slate-500">CFO Approval Workflow — UI Mockup</span>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 1 — INDEX PAGE (table row with pending badge + actions)
+════════════════════════════════════════════════════════════════════════ -->
+<div class="mb-3">
+    <p class="mb-2 text-[10.5px] font-bold uppercase tracking-widest text-slate-400">① Index / Daily Transactions — Table Row</p>
+</div>
+
+<div class="mb-8 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <table class="min-w-full text-[12.5px]">
+        <thead>
+            <tr class="border-b border-slate-100 bg-slate-50 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">
+                <th class="px-4 py-3 text-left">Voucher No.</th>
+                <th class="px-4 py-3 text-left">Date</th>
+                <th class="px-4 py-3 text-left">Payee</th>
+                <th class="px-4 py-3 text-right">Amount</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3 text-right">Actions</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+
+            <!-- Pending Approval row -->
+            <tr class="bg-amber-50/40 align-middle transition hover:bg-amber-50/70">
+                <td class="px-4 py-3 font-semibold text-omet-navy">2026-0042</td>
+                <td class="px-4 py-3 text-slate-500">Jun 17, 2026</td>
+                <td class="px-4 py-3 text-slate-700">PLDT Enterprise</td>
+                <td class="px-4 py-3 text-right font-semibold tabular-nums text-omet-navy">₱18,500.00</td>
+                <td class="px-4 py-3">
+                    <!-- NEW: Pending Approval badge -->
+                    <span class="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Pending Approval
+                    </span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <div class="flex flex-row flex-nowrap items-center justify-end gap-1.5">
+                        <!-- CFO/Admin only: Review button -->
+                        <a href="#section-cfo"
+                           class="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 shadow-sm transition hover:bg-amber-100">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            Review
+                        </a>
+                        <!-- Edit hidden for non-CFO/admin when pending -->
+                        <span class="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 cursor-not-allowed select-none" title="Locked until CFO approves">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                            Edit
+                        </span>
+                        <!-- Delete also locked -->
+                        <span class="inline-flex items-center gap-1 rounded-md border border-slate-100 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-300 cursor-not-allowed select-none" title="Locked until CFO approves">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                        </span>
+                    </div>
+                </td>
+            </tr>
+
+            <!-- Normal unpaid row for comparison -->
+            <tr class="align-middle transition hover:bg-slate-50">
+                <td class="px-4 py-3 font-semibold text-omet-navy">2026-0041</td>
+                <td class="px-4 py-3 text-slate-500">Jun 15, 2026</td>
+                <td class="px-4 py-3 text-slate-700">Meralco</td>
+                <td class="px-4 py-3 text-right font-semibold tabular-nums text-omet-navy">₱7,200.00</td>
+                <td class="px-4 py-3">
+                    <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-800 ring-1 ring-amber-100">Unpaid</span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <div class="flex flex-row flex-nowrap items-center justify-end gap-1.5">
+                        <button class="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg> Pay
+                        </button>
+                        <button class="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
+                            <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg> Edit
+                        </button>
+                    </div>
+                </td>
+            </tr>
+
+        </tbody>
+    </table>
+    <p class="border-t border-slate-100 px-4 py-2 text-[10.5px] text-slate-400">
+        <svg class="inline h-3 w-3 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Grayed-out Edit &amp; Delete = locked for accounting staff. CFO/Admin see the <strong>Review</strong> button instead.
+    </p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 2A — SHOW PAGE: Accounting Staff view (pending banner)
+════════════════════════════════════════════════════════════════════════ -->
+<div class="mb-3">
+    <p class="mb-2 text-[10.5px] font-bold uppercase tracking-widest text-slate-400">② Voucher Show Page — As seen by Accounting Staff</p>
+</div>
+
+<div class="mb-8 mx-auto max-w-4xl space-y-4">
+
+    <!-- Back link -->
+    <a href="#" class="inline-flex w-fit items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-omet-blue">
+        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back to Daily Transactions
+    </a>
+
+    <!-- PENDING APPROVAL BANNER — Accounting staff view -->
+    <div class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4">
+        <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100">
+            <svg class="h-4 w-4 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div class="flex-1">
+            <p class="text-[13px] font-semibold text-amber-800">Awaiting CFO Approval</p>
+            <p class="mt-0.5 text-[12px] text-amber-700">This voucher has been submitted and is pending review by the CFO. Editing and payment recording are locked until it is approved.</p>
+            <p class="mt-2 text-[11px] text-amber-600">Submitted <span class="font-semibold">Jun 17, 2026 at 10:42 AM</span> by <span class="font-semibold">Maria Santos</span></p>
+        </div>
+    </div>
+
+    <!-- Header card -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-[10.5px] font-semibold uppercase tracking-wider text-omet-blue">Disbursement</p>
+                <h1 class="mt-0.5 text-lg font-semibold text-omet-navy">2026-0042 · PLDT Enterprise</h1>
+                <p class="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-gray-500">
+                    <span class="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Pending Approval
+                    </span>
+                    <span>Voucher date Jun 17, 2026</span>
+                    <span>· Due Jun 30, 2026</span>
+                </p>
+            </div>
+            <!-- Edit button — locked for accounting staff -->
+            <div class="flex flex-wrap items-start gap-3">
+                <button disabled
+                        class="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg border border-slate-100 bg-slate-50 px-3 py-1.5 text-[12.5px] font-semibold text-slate-300 shadow-sm"
+                        title="Locked pending CFO approval">
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Edit
+                </button>
+            </div>
+            <div class="flex flex-wrap gap-4 text-right">
+                <div>
+                    <p class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Payable</p>
+                    <p class="text-[15px] font-semibold tabular-nums text-omet-navy">₱18,500.00</p>
+                </div>
+                <div>
+                    <p class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Paid</p>
+                    <p class="text-[15px] font-semibold tabular-nums text-slate-300">—</p>
+                </div>
+                <div>
+                    <p class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Balance</p>
+                    <p class="text-[15px] font-semibold tabular-nums text-amber-700">₱18,500.00</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment section — locked -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm opacity-60">
+        <h3 class="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+            Payment history
+        </h3>
+        <div class="flex items-center gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-4">
+            <svg class="h-4 w-4 text-slate-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <p class="text-[12px] text-slate-400">Payment recording is locked until this voucher is approved by the CFO.</p>
+        </div>
+    </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 2B — SHOW PAGE: CFO view (approve/reject card)
+════════════════════════════════════════════════════════════════════════ -->
+<div class="mb-3" id="section-cfo">
+    <p class="mb-2 text-[10.5px] font-bold uppercase tracking-widest text-slate-400">③ Voucher Show Page — As seen by CFO / Admin</p>
+</div>
+
+<div class="mb-8 mx-auto max-w-4xl space-y-4">
+
+    <!-- Back link -->
+    <a href="#" class="inline-flex w-fit items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-omet-blue">
+        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        Back to Daily Transactions
+    </a>
+
+    <!-- CFO APPROVAL ACTION CARD -->
+    <div class="rounded-xl border-2 border-omet-blue/20 bg-white shadow-sm">
+        <div class="flex items-center gap-3 border-b border-slate-100 bg-omet-blue/5 px-5 py-3.5">
+            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-omet-blue/10">
+                <svg class="h-3.5 w-3.5 text-omet-blue" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div>
+                <p class="text-[12.5px] font-bold text-omet-navy">CFO Review Required</p>
+                <p class="text-[11px] text-slate-500">Submitted by <strong>Maria Santos</strong> · Jun 17, 2026 at 10:42 AM</p>
+            </div>
+        </div>
+
+        <div class="px-5 py-4">
+            <!-- Voucher summary for quick review -->
+            <div class="mb-4 grid grid-cols-2 gap-3 rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 sm:grid-cols-4">
+                <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Payee</p>
+                    <p class="mt-0.5 text-[12.5px] font-medium text-slate-700">PLDT Enterprise</p>
+                </div>
+                <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Amount Payable</p>
+                    <p class="mt-0.5 text-[12.5px] font-bold tabular-nums text-omet-navy">₱18,500.00</p>
+                </div>
+                <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Type</p>
+                    <p class="mt-0.5 text-[12.5px] text-slate-700">Request for Payment</p>
+                </div>
+                <div>
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Entries</p>
+                    <p class="mt-0.5 text-[12.5px] text-slate-700">2 Debit · 2 Credit <span class="ml-1 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">Balanced</span></p>
+                </div>
+            </div>
+
+            <!-- Approve / Reject actions -->
+            <div class="flex flex-wrap items-center gap-3">
+                <form method="POST" action="#" onsubmit="return confirm('Approve this voucher? It will be released for payment recording.');">
+                    <button type="submit"
+                            class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-emerald-700">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Approve Voucher
+                    </button>
+                </form>
+                <form method="POST" action="#" onsubmit="return confirm('Reject this voucher? It will be cancelled. This cannot be undone.');">
+                    <button type="submit"
+                            class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-5 py-2.5 text-[13px] font-semibold text-red-700 shadow-sm transition hover:bg-red-100">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                        Reject &amp; Cancel
+                    </button>
+                </form>
+                <p class="text-[11px] text-slate-400">Rejection is final — voucher will be cancelled with no resubmit.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header card — same as staff view but Edit is active for CFO -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-[10.5px] font-semibold uppercase tracking-wider text-omet-blue">Disbursement</p>
+                <h1 class="mt-0.5 text-lg font-semibold text-omet-navy">2026-0042 · PLDT Enterprise</h1>
+                <p class="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-gray-500">
+                    <span class="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-200">
+                        <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        Pending Approval
+                    </span>
+                    <span>Voucher date Jun 17, 2026</span>
+                </p>
+            </div>
+            <!-- CFO CAN still edit -->
+            <button class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
+                <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                Edit
+            </button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SECTION 2C — After approval: approved-by badge
+    ═══════════════════════════════════════════════════════════════ -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <p class="mb-2 text-[10px] font-bold uppercase tracking-widest text-slate-300">— After CFO approves (status becomes Unpaid) —</p>
+        <div class="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-2.5">
+            <svg class="h-4 w-4 shrink-0 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <p class="text-[12px] text-emerald-800">
+                Approved by <strong>Ana Reyes (CFO)</strong> on <strong>Jun 17, 2026 at 11:05 AM</strong>
+                · <span class="font-medium text-emerald-700">Payment recording is now enabled.</span>
+            </p>
+        </div>
+    </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     SECTION 3 — CREATE PAGE: submission note for accounting staff
+════════════════════════════════════════════════════════════════════════ -->
+<div class="mb-3">
+    <p class="mb-2 text-[10.5px] font-bold uppercase tracking-widest text-slate-400">④ Create Voucher — Submit Bar (Accounting Staff)</p>
+</div>
+
+<div class="mb-8 mx-auto max-w-4xl">
+    <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="space-y-2">
+            <!-- Balanced hint — ready to submit -->
+            <p class="text-right text-[11.5px] font-medium text-omet-blue">
+                <svg class="inline h-3.5 w-3.5 align-middle" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                This voucher will be submitted to the CFO for approval before payment can be recorded.
+            </p>
+            <div class="flex items-center justify-between gap-3">
+                <p class="text-[11px] text-slate-400">Fields marked <span class="font-semibold text-red-400">*</span> are required.</p>
+                <div class="flex items-center gap-3">
+                    <button class="rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-semibold text-gray-600 transition hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button class="inline-flex items-center gap-2 rounded-lg bg-omet-blue px-6 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        Submit for Approval
+                    </button>
+                </div>
+            </div>
+        </div>
+        <p class="mt-3 border-t border-slate-100 pt-3 text-[10.5px] text-slate-400">
+            Admin and CFO users save vouchers directly as <strong>Unpaid</strong> — no approval step required.
+        </p>
+    </div>
+</div>
+
+<script>lucide.createIcons();</script>
+</body>
+</html>

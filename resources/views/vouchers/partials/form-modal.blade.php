@@ -1,4 +1,4 @@
-{{-- NEW / EDIT VOUCHER modal — expects Alpine scope `vouchersPage` (f, editId, showForm) --}}
+{{-- EDIT VOUCHER modal — expects Alpine scope `vouchersPage` (f, editId, showForm) --}}
 <div x-cloak x-show="showForm"
      class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/40 px-4 py-6"
      @keydown.escape.window="closeForm()">
@@ -46,6 +46,35 @@
                         <label class="mb-1 block text-[11px] font-medium text-gray-600">Release date <span class="text-gray-400">(actual)</span></label>
                         <input type="date" name="release_date" x-model="f.release_date"
                                class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
+                    </div>
+                </div>
+
+                {{-- Voucher source --}}
+                <div>
+                    <label class="mb-1.5 block text-[11px] font-medium text-gray-600">Voucher Source</label>
+                    <div class="flex flex-wrap gap-2">
+                        @foreach (\App\Models\Voucher::SOURCES as $key => $label)
+                            <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] font-medium transition"
+                                   :class="f.source === '{{ $key }}' ? 'border-omet-blue bg-omet-blue/5 text-omet-blue' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'">
+                                <input type="radio" name="source" value="{{ $key }}" x-model="f.source" class="sr-only">
+                                <span class="flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 transition shrink-0"
+                                      :class="f.source === '{{ $key }}' ? 'border-omet-blue' : 'border-slate-300'">
+                                    <span class="h-1.5 w-1.5 rounded-full bg-omet-blue"
+                                          :class="f.source === '{{ $key }}' ? 'opacity-100' : 'opacity-0'"></span>
+                                </span>
+                                {{ $label }}
+                            </label>
+                        @endforeach
+                        <label class="flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-2 text-[12px] font-medium transition"
+                               :class="f.source === '' ? 'border-slate-300 bg-slate-50 text-slate-500' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'">
+                            <input type="radio" name="source" value="" x-model="f.source" class="sr-only">
+                            <span class="flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 transition shrink-0"
+                                  :class="f.source === '' ? 'border-slate-400' : 'border-slate-300'">
+                                <span class="h-1.5 w-1.5 rounded-full bg-slate-400"
+                                      :class="f.source === '' ? 'opacity-100' : 'opacity-0'"></span>
+                            </span>
+                            Unspecified
+                        </label>
                     </div>
                 </div>
 

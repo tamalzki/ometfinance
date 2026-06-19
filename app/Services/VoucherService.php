@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\BankAccount;
 use App\Models\LedgerEntry;
+use App\Models\ProjectCollection;
 use App\Models\ProjectExpense;
 use App\Models\Voucher;
 use App\Models\VoucherPayment;
@@ -17,12 +18,15 @@ use Illuminate\Support\Facades\DB;
  *     deducts the account because BankAccount::currentBalance() is ledger-derived.
  *   • Recomputes the voucher's paid total, status and release date.
  *
- * Any payment recorded posts to the project's outflow immediately —
- * recompute() keeps a single running ProjectExpense per voucher in sync
- * (amount = total paid so far), tagged Partial or Full via the voucher's
- * status. The entry is removed entirely if every payment is reversed.
+ * Any payment recorded posts to the affected projects' outflow/inflow
+ * immediately — recompute() keeps ProjectExpense rows (debit entries) and
+ * ProjectCollection rows (credit entries) per voucher in sync, one row per
+ * project touched, proportioned from the paid total. A voucher can span
+ * multiple projects across its entries; each gets its own row. Rows are
+ * removed entirely if every payment is reversed.
  *
- * Deleting a payment reverses all of the above atomically.
+ * Deleting a payment, deleting the voucher, or cancelling it all reverse
+ * the above atomically.
  */
 class VoucherService
 {
@@ -110,7 +114,12 @@ class VoucherService
                 $payment->ledgerEntry?->delete();
                 $payment->delete();
             }
-            $voucher->projectExpense?->delete();
+            foreach ($voucher->attachments as $attachment) {
+                $attachment->disk()->delete($attachment->path);
+                $attachment->delete();
+            }
+            ProjectExpense::where('voucher_id', $voucher->id)->delete();
+            ProjectCollection::where('voucher_id', $voucher->id)->delete();
             $voucher->delete();
         });
     }
@@ -147,42 +156,159 @@ class VoucherService
             'release_date' => $status === 'paid' ? ($lastPaidOn ?? $voucher->release_date) : $voucher->release_date,
         ]);
 
-        self::syncProjectOutflow($voucher->fresh(['payments', 'projectExpense']));
+        $fresh = $voucher->fresh(['payments', 'entries.category']);
+        self::syncProjectOutflow($fresh);
+        self::syncProjectInflow($fresh);
     }
 
     /**
-     * Keep the voucher's running ProjectExpense in step with what's been
-     * paid so far. Nothing is owed out yet (Unpaid, zero paid) → no entry.
-     * Once any payment lands, the entry exists with amount = total paid;
-     * its tag (Partial vs Full) is read from the voucher's own status.
+     * Keep ProjectExpense rows in sync with what's been paid so far.
+     *
+     * When the voucher has accounting entries:
+     *   - Each DEBIT entry with a project_id gets its own ProjectExpense row,
+     *     linked via voucher_entry_id. Amount is proportioned from paid total.
+     *   - All previous entry-linked expenses for this voucher are replaced.
+     *
+     * When no entries exist (legacy / simple voucher):
+     *   - One ProjectExpense for the voucher-level project_id, amount = paid.
+     *
+     * Zero paid → all expenses for this voucher are removed.
      */
     private static function syncProjectOutflow(Voucher $voucher): void
     {
         $paid = $voucher->amountPaid();
 
-        if ($paid <= 0 || ! $voucher->project_id) {
-            $voucher->projectExpense?->delete();
+        if ($paid <= 0) {
+            ProjectExpense::where('voucher_id', $voucher->id)->delete();
             return;
         }
 
         $lastPayment = $voucher->payments->sortByDesc('paid_on')->first();
+        $description = sprintf('Voucher %s — %s', $voucher->voucher_no, $voucher->payee_name);
+        $spentOn     = $lastPayment?->paid_on ?? now()->toDateString();
+        $bankId      = $lastPayment?->bank_account_id;
+
+        $debitEntries = $voucher->entries
+            ->where('entry_type', 'debit')
+            ->whereNotNull('project_id')
+            ->values();
+
+        if ($debitEntries->isNotEmpty()) {
+            // Entry-based outflow: one ProjectExpense per debit+project line.
+            $totalDebit = $debitEntries->sum(fn ($e) => (float) $e->amount);
+
+            // Delete all existing entry-linked expenses for this voucher, then recreate.
+            ProjectExpense::where('voucher_id', $voucher->id)->delete();
+
+            foreach ($debitEntries as $entry) {
+                $proportion   = $totalDebit > 0 ? ((float) $entry->amount / $totalDebit) : 0;
+                $entryPaidAmt = round($paid * $proportion, 2);
+
+                if ($entryPaidAmt <= 0) {
+                    continue;
+                }
+
+                ProjectExpense::create([
+                    'project_id'       => $entry->project_id,
+                    'voucher_id'       => $voucher->id,
+                    'voucher_entry_id' => $entry->id,
+                    'bank_account_id'  => $bankId,
+                    'spent_on'         => $spentOn,
+                    'amount'           => $entryPaidAmt,
+                    'description'      => $description,
+                    'vendor_ref'       => $voucher->voucher_no,
+                    'category'         => $entry->category?->fullLabel() ?? $voucher->typeLabel(),
+                    'category_id'      => $entry->category_id,
+                ]);
+            }
+
+            return;
+        }
+
+        // Legacy / no-entries path: single expense for the voucher's project.
+        if (! $voucher->project_id) {
+            ProjectExpense::where('voucher_id', $voucher->id)->whereNull('voucher_entry_id')->delete();
+            return;
+        }
 
         $attrs = [
-            'bank_account_id' => $lastPayment?->bank_account_id,
-            'spent_on'        => $lastPayment?->paid_on ?? now()->toDateString(),
+            'bank_account_id' => $bankId,
+            'spent_on'        => $spentOn,
             'amount'          => $paid,
-            'description'     => sprintf('Voucher %s — %s', $voucher->voucher_no, $voucher->payee_name),
+            'description'     => $description,
             'vendor_ref'      => $voucher->voucher_no,
             'category'        => $voucher->typeLabel(),
             'category_id'     => $voucher->category_id,
         ];
 
-        if ($voucher->projectExpense) {
-            $voucher->projectExpense->update($attrs);
+        $existing = ProjectExpense::where('voucher_id', $voucher->id)->whereNull('voucher_entry_id')->first();
+
+        if ($existing) {
+            $existing->update($attrs);
         } else {
             ProjectExpense::create($attrs + [
                 'project_id' => $voucher->project_id,
                 'voucher_id' => $voucher->id,
+            ]);
+        }
+    }
+
+    /**
+     * Keep ProjectCollection rows in sync with what's been paid so far.
+     *
+     * Symmetric to syncProjectOutflow: each CREDIT entry with a project_id
+     * represents money flowing INTO that project (e.g. a reimbursement or
+     * inter-project settlement riding on this voucher), proportioned from
+     * the paid total. Entries without a project don't post anywhere — they
+     * are just the offsetting accounting side (e.g. Accounts Payable).
+     *
+     * Zero paid → all collections for this voucher are removed.
+     */
+    private static function syncProjectInflow(Voucher $voucher): void
+    {
+        $paid = $voucher->amountPaid();
+
+        if ($paid <= 0) {
+            ProjectCollection::where('voucher_id', $voucher->id)->delete();
+            return;
+        }
+
+        $lastPayment = $voucher->payments->sortByDesc('paid_on')->first();
+        $notes       = sprintf('Voucher %s — %s', $voucher->voucher_no, $voucher->payee_name);
+        $collectedOn = $lastPayment?->paid_on ?? now()->toDateString();
+        $bankId      = $lastPayment?->bank_account_id;
+
+        $creditEntries = $voucher->entries
+            ->where('entry_type', 'credit')
+            ->whereNotNull('project_id')
+            ->values();
+
+        // Delete all existing entry-linked collections for this voucher, then recreate.
+        ProjectCollection::where('voucher_id', $voucher->id)->delete();
+
+        if ($creditEntries->isEmpty()) {
+            return;
+        }
+
+        $totalCredit = $creditEntries->sum(fn ($e) => (float) $e->amount);
+
+        foreach ($creditEntries as $entry) {
+            $proportion   = $totalCredit > 0 ? ((float) $entry->amount / $totalCredit) : 0;
+            $entryPaidAmt = round($paid * $proportion, 2);
+
+            if ($entryPaidAmt <= 0) {
+                continue;
+            }
+
+            ProjectCollection::create([
+                'project_id'       => $entry->project_id,
+                'voucher_id'       => $voucher->id,
+                'voucher_entry_id' => $entry->id,
+                'bank_account_id'  => $bankId,
+                'collected_on'     => $collectedOn,
+                'amount'           => $entryPaidAmt,
+                'reference'        => $voucher->voucher_no,
+                'notes'            => $notes,
             ]);
         }
     }

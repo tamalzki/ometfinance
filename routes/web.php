@@ -78,6 +78,8 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('vouchers')->name('vouchers.')->group(function () {
         Route::get('/',                          [VoucherController::class, 'index'])->name('index');
         Route::get('/payables',                  [VoucherController::class, 'payables'])->name('payables');
+        Route::get('/create',                    [VoucherController::class, 'create'])->name('create');
+        Route::get('/{voucher}/edit',            [VoucherController::class, 'edit'])->name('edit');
         Route::get('/{voucher}',                 [VoucherController::class, 'show'])->name('show');
         Route::post('/',                         [VoucherController::class, 'store'])->name('store');
         Route::put('/{voucher}',                 [VoucherController::class, 'update'])->name('update');
@@ -86,6 +88,8 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{voucher}/reactivate',     [VoucherController::class, 'reactivate'])->name('reactivate');
         Route::post('/{voucher}/payments',       [VoucherController::class, 'storePayment'])->name('payments.store');
         Route::delete('/payments/{payment}',     [VoucherController::class, 'destroyPayment'])->name('payments.destroy');
+        Route::post('/{voucher}/entries',        [VoucherController::class, 'storeEntry'])->name('entries.store');
+        Route::delete('/entries/{entry}',        [VoucherController::class, 'destroyEntry'])->name('entries.destroy');
         Route::post('/{voucher}/attachments',                  [VoucherController::class, 'storeAttachment'])->name('attachments.store');
         Route::get('/attachments/{attachment}/download',       [VoucherController::class, 'downloadAttachment'])->name('attachments.download');
         Route::delete('/attachments/{attachment}',             [VoucherController::class, 'destroyAttachment'])->name('attachments.destroy');

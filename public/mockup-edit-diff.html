@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OMET — Edit Change Request (CFO View)</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script>
+tailwind.config = {
+    theme: {
+        extend: {
+            colors: {
+                'omet-blue':      '#1D4ED8',
+                'omet-lightblue': '#2563EB',
+                'omet-navy':      '#1E3A5F',
+            }
+        }
+    }
+}
+</script>
+<style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; background: #f1f5f9; }
+    .del { text-decoration: line-through; }
+</style>
+</head>
+<body class="min-h-screen p-6">
+<div class="mx-auto max-w-3xl space-y-5">
+
+    <!-- Nav label -->
+    <div class="flex items-center gap-3">
+        <span class="rounded-full bg-omet-blue px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-white">OMET</span>
+        <span class="text-[12px] font-semibold text-slate-500">Mockup — CFO View · Edit Change Request on Approved Voucher</span>
+    </div>
+
+    <!-- Back -->
+    <a href="#" class="inline-flex w-fit items-center gap-1.5 text-[12px] font-medium text-slate-500 hover:text-omet-blue">
+        <i data-lucide="arrow-left" class="h-3.5 w-3.5"></i> Back to Daily Transactions
+    </a>
+
+    <!-- ── Voucher header ─────────────────────────────────────────── -->
+    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <p class="text-[10.5px] font-semibold uppercase tracking-wider text-omet-blue">Disbursement</p>
+                <h1 class="mt-0.5 text-lg font-semibold text-omet-navy">2026-0042 · PLDT Enterprise</h1>
+                <p class="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-gray-500">
+                    <!-- Edit Pending badge -->
+                    <span class="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-200">
+                        <i data-lucide="git-pull-request" class="h-3 w-3"></i> Edit Pending Review
+                    </span>
+                    <span>Originally approved Jun 17, 2026</span>
+                </p>
+            </div>
+            <div class="flex flex-wrap gap-4 text-right">
+                <div>
+                    <p class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Original Amount</p>
+                    <p class="text-[14px] font-semibold tabular-nums text-slate-400 del">₱18,500.00</p>
+                </div>
+                <div>
+                    <p class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Revised Amount</p>
+                    <p class="text-[14px] font-semibold tabular-nums text-omet-navy">₱21,750.00</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── CFO REVIEW CARD ───────────────────────────────────────── -->
+    <div class="rounded-xl border-2 border-violet-200 bg-white shadow-sm">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-100 bg-violet-50/60 px-5 py-3.5">
+            <div class="flex items-center gap-3">
+                <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-violet-100">
+                    <i data-lucide="git-pull-request" class="h-3.5 w-3.5 text-violet-700"></i>
+                </div>
+                <div>
+                    <p class="text-[12.5px] font-bold text-omet-navy">Edit Request — CFO Approval Needed</p>
+                    <p class="text-[11px] text-slate-500">
+                        Requested by <strong>Maria Santos</strong> · Jun 19, 2026 at 9:15 AM
+                        · <span class="font-medium text-violet-700">3 fields changed · 1 entry modified</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Changed fields diff ──────────────────────────────── -->
+        <div class="px-5 pt-4 pb-2">
+            <p class="mb-3 text-[10.5px] font-bold uppercase tracking-widest text-slate-400">Changed Fields Only</p>
+
+            <div class="overflow-hidden rounded-lg border border-slate-200 text-[12.5px]">
+
+                <!-- Table header -->
+                <div class="grid grid-cols-[180px_1fr_1fr] border-b border-slate-200 bg-slate-50 text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">
+                    <div class="px-3 py-2.5">Field</div>
+                    <div class="border-l border-slate-200 bg-red-50/60 px-3 py-2.5 text-red-600">Before (Approved)</div>
+                    <div class="border-l border-slate-200 bg-emerald-50/60 px-3 py-2.5 text-emerald-700">After (Requested)</div>
+                </div>
+
+                <!-- Row: Payee -->
+                <div class="grid grid-cols-[180px_1fr_1fr] border-b border-slate-100">
+                    <div class="flex items-center gap-1.5 bg-slate-50/50 px-3 py-3 font-medium text-slate-500">
+                        <i data-lucide="user" class="h-3 w-3 shrink-0 text-slate-400"></i> Payee
+                    </div>
+                    <div class="border-l border-slate-100 bg-red-50/40 px-3 py-3">
+                        <span class="del text-red-600">PLDT Enterprise</span>
+                    </div>
+                    <div class="border-l border-slate-100 bg-emerald-50/40 px-3 py-3">
+                        <span class="font-semibold text-emerald-800">PLDT Business</span>
+                    </div>
+                </div>
+
+                <!-- Row: Amount Payable -->
+                <div class="grid grid-cols-[180px_1fr_1fr] border-b border-slate-100">
+                    <div class="flex items-center gap-1.5 bg-slate-50/50 px-3 py-3 font-medium text-slate-500">
+                        <i data-lucide="philippine-peso" class="h-3 w-3 shrink-0 text-slate-400"></i> Amount Payable
+                    </div>
+                    <div class="border-l border-slate-100 bg-red-50/40 px-3 py-3 tabular-nums">
+                        <span class="del text-red-600">₱18,500.00</span>
+                    </div>
+                    <div class="border-l border-slate-100 bg-emerald-50/40 px-3 py-3 tabular-nums">
+                        <span class="font-semibold text-emerald-800">₱21,750.00</span>
+                        <span class="ml-2 text-[10.5px] font-medium text-emerald-600">+₱3,250.00</span>
+                    </div>
+                </div>
+
+                <!-- Row: Particular -->
+                <div class="grid grid-cols-[180px_1fr_1fr] border-b border-slate-100">
+                    <div class="flex items-start gap-1.5 bg-slate-50/50 px-3 py-3 font-medium text-slate-500">
+                        <i data-lucide="file-text" class="mt-0.5 h-3 w-3 shrink-0 text-slate-400"></i> Particular
+                    </div>
+                    <div class="border-l border-slate-100 bg-red-50/40 px-3 py-3">
+                        <span class="del text-red-600">Monthly internet subscription — June 2026</span>
+                    </div>
+                    <div class="border-l border-slate-100 bg-emerald-50/40 px-3 py-3">
+                        <span class="font-semibold text-emerald-800">Monthly internet subscription — June 2026 (upgraded plan + installation fee)</span>
+                    </div>
+                </div>
+
+                <!-- Row: Due Date -->
+                <div class="grid grid-cols-[180px_1fr_1fr]">
+                    <div class="flex items-center gap-1.5 bg-slate-50/50 px-3 py-3 font-medium text-slate-500">
+                        <i data-lucide="calendar" class="h-3 w-3 shrink-0 text-slate-400"></i> Due Date
+                    </div>
+                    <div class="border-l border-slate-100 bg-red-50/40 px-3 py-3">
+                        <span class="del text-red-600">Jun 30, 2026</span>
+                    </div>
+                    <div class="border-l border-slate-100 bg-emerald-50/40 px-3 py-3">
+                        <span class="font-semibold text-emerald-800">Jul 5, 2026</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ── Accounting Entries diff ───────────────────────────── -->
+        <div class="px-5 pt-4 pb-2">
+            <p class="mb-3 text-[10.5px] font-bold uppercase tracking-widest text-slate-400">Accounting Entries — Changes</p>
+
+            <div class="space-y-2">
+
+                <!-- Unchanged entry (dimmed) -->
+                <div class="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/50 px-3 py-2.5 opacity-50">
+                    <span class="text-[9.5px] font-bold uppercase tracking-widest text-slate-400">No change</span>
+                    <span class="rounded-md bg-blue-600 px-2 py-0.5 text-[10.5px] font-bold text-white">DR</span>
+                    <span class="text-[12px] text-slate-500">Utilities Expense</span>
+                    <span class="ml-auto tabular-nums text-[12.5px] font-semibold text-slate-500">₱18,500.00</span>
+                </div>
+
+                <!-- Modified entry -->
+                <div class="overflow-hidden rounded-lg border border-amber-200">
+                    <div class="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-3 py-1.5">
+                        <i data-lucide="pencil" class="h-3 w-3 text-amber-600"></i>
+                        <span class="text-[10.5px] font-bold uppercase tracking-widest text-amber-700">Modified Entry</span>
+                    </div>
+                    <!-- Before -->
+                    <div class="flex flex-wrap items-center gap-2 bg-red-50/50 px-3 py-2.5">
+                        <span class="text-[9.5px] font-bold uppercase tracking-widest text-red-400">Before</span>
+                        <span class="rounded-md bg-emerald-600 px-2 py-0.5 text-[10.5px] font-bold text-white">CR</span>
+                        <span class="del text-[12px] text-red-500">Accounts Payable — PLDT</span>
+                        <span class="ml-auto tabular-nums text-[12.5px] font-semibold text-red-500 del">₱18,500.00</span>
+                    </div>
+                    <!-- After -->
+                    <div class="flex flex-wrap items-center gap-2 border-t border-amber-100 bg-emerald-50/50 px-3 py-2.5">
+                        <span class="text-[9.5px] font-bold uppercase tracking-widest text-emerald-600">After</span>
+                        <span class="rounded-md bg-emerald-600 px-2 py-0.5 text-[10.5px] font-bold text-white">CR</span>
+                        <span class="text-[12px] font-semibold text-emerald-800">Accounts Payable — PLDT</span>
+                        <span class="ml-auto tabular-nums text-[12.5px] font-bold text-emerald-800">₱21,750.00</span>
+                        <span class="text-[10.5px] font-medium text-emerald-600">+₱3,250.00</span>
+                    </div>
+                </div>
+
+                <!-- New entry added -->
+                <div class="overflow-hidden rounded-lg border border-emerald-200">
+                    <div class="flex items-center gap-2 border-b border-emerald-100 bg-emerald-50 px-3 py-1.5">
+                        <i data-lucide="plus-circle" class="h-3 w-3 text-emerald-600"></i>
+                        <span class="text-[10.5px] font-bold uppercase tracking-widest text-emerald-700">New Entry Added</span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 bg-emerald-50/40 px-3 py-2.5">
+                        <span class="rounded-md bg-blue-600 px-2 py-0.5 text-[10.5px] font-bold text-white">DR</span>
+                        <span class="text-[12px] font-semibold text-emerald-800">Installation &amp; Setup Fee</span>
+                        <span class="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Project: BGC Office Setup</span>
+                        <span class="ml-auto tabular-nums text-[12.5px] font-bold text-emerald-800">₱3,250.00</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Totals bar -->
+            <div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-[12px]">
+                <div class="flex flex-wrap items-center gap-4">
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-semibold uppercase tracking-wide text-blue-700">Debit</span>
+                        <span class="del tabular-nums text-red-400 text-[11px]">₱18,500.00</span>
+                        <i data-lucide="arrow-right" class="h-3 w-3 text-slate-400"></i>
+                        <span class="font-bold tabular-nums text-blue-900">₱21,750.00</span>
+                    </div>
+                    <div class="h-4 w-px bg-slate-300"></div>
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-semibold uppercase tracking-wide text-emerald-700">Credit</span>
+                        <span class="del tabular-nums text-red-400 text-[11px]">₱18,500.00</span>
+                        <i data-lucide="arrow-right" class="h-3 w-3 text-slate-400"></i>
+                        <span class="font-bold tabular-nums text-emerald-900">₱21,750.00</span>
+                    </div>
+                </div>
+                <span class="inline-flex items-center gap-1.5 text-[11.5px] font-medium text-emerald-700">
+                    <i data-lucide="check-circle-2" class="h-3.5 w-3.5"></i> Still Balanced
+                </span>
+            </div>
+        </div>
+
+        <!-- ── Reason for edit (staff note) ─────────────────────── -->
+        <div class="mx-5 mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p class="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Reason for Edit (from Staff)</p>
+            <p class="text-[12.5px] text-slate-700">"Corrected payee name and added the installation fee that was missed in the original voucher. PLDT invoice reference: INV-2026-0891."</p>
+        </div>
+
+        <!-- ── Approve / Reject ──────────────────────────────────── -->
+        <div class="flex flex-wrap items-center gap-3 border-t border-slate-100 px-5 py-4">
+            <button onclick="showApproved()"
+                    class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-emerald-700">
+                <i data-lucide="check" class="h-4 w-4"></i> Approve Changes
+            </button>
+            <button
+                    class="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-5 py-2.5 text-[13px] font-semibold text-red-700 shadow-sm transition hover:bg-red-100">
+                <i data-lucide="x" class="h-4 w-4"></i> Reject Changes
+            </button>
+            <p class="text-[11px] text-slate-400">Rejecting will revert to the original approved values.</p>
+        </div>
+    </div>
+
+    <!-- ── Unchanged fields (collapsed) ─────────────────────────── -->
+    <details class="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <summary class="flex cursor-pointer items-center justify-between gap-3 px-5 py-3.5 text-[12px] font-semibold text-slate-500 hover:bg-slate-50 select-none">
+            <span class="flex items-center gap-2">
+                <i data-lucide="eye-off" class="h-3.5 w-3.5"></i>
+                Unchanged fields (hidden by default)
+            </span>
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-500">8 fields</span>
+        </summary>
+        <div class="border-t border-slate-100 px-5 py-4">
+            <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-[12px] text-slate-500 opacity-60">
+                <div><span class="font-medium text-slate-400">Voucher Date</span><br>Jun 17, 2026</div>
+                <div><span class="font-medium text-slate-400">Source</span><br>Main</div>
+                <div><span class="font-medium text-slate-400">Transaction Type</span><br>Request for Payment</div>
+                <div><span class="font-medium text-slate-400">Mode of Payment</span><br>Fund Transfer</div>
+                <div><span class="font-medium text-slate-400">Source Bank Account</span><br>BDO — Main Operating</div>
+                <div><span class="font-medium text-slate-400">PO Number</span><br>PO-2026-198</div>
+                <div><span class="font-medium text-slate-400">Remarks</span><br>—</div>
+                <div><span class="font-medium text-slate-400">Notes</span><br>—</div>
+            </div>
+        </div>
+    </details>
+
+    <!-- ── After approval flash (interactive demo) ──────────────── -->
+    <div id="approved-flash" class="hidden rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] font-medium text-emerald-800">
+        <i data-lucide="check-circle-2" class="inline h-3.5 w-3.5 align-middle"></i>
+        Changes approved. Voucher updated to revised values — ₱21,750.00 is now the payable amount.
+    </div>
+
+</div>
+
+<script>
+lucide.createIcons();
+function showApproved() {
+    document.getElementById('approved-flash').classList.remove('hidden');
+    document.getElementById('approved-flash').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+</script>
+</body>
+</html>

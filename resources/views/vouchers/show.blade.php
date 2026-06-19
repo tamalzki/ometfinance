@@ -57,6 +57,7 @@
         'due_date'               => $voucher->due_date?->format('Y-m-d'),
         'release_date'           => $voucher->release_date?->format('Y-m-d'),
         'payee_name'             => $voucher->payee_name,
+        'source'                 => $voucher->source,
         'project_id'             => $voucher->project_id,
         'source_bank_account_id' => $voucher->source_bank_account_id,
         'transaction_type'       => $voucher->transaction_type,
@@ -155,7 +156,7 @@ document.addEventListener('alpine:init', () => {
         },
         openEdit(v) {
             this.editId = v.id;
-            this.lockedFields = !!v.has_payments;
+            this.lockedFields = false;
             this.payeeOther = !!v.payee_name && ! this.payees.some(p => p.label === v.payee_name);
             this.closeFormCombos();
             this.f = {
@@ -164,6 +165,7 @@ document.addEventListener('alpine:init', () => {
                 due_date: v.due_date || '',
                 release_date: v.release_date || '',
                 payee_name: v.payee_name,
+                source: v.source || '',
                 project_id: v.project_id ? String(v.project_id) : '',
                 source_bank_account_id: v.source_bank_account_id ? String(v.source_bank_account_id) : '',
                 transaction_type: v.transaction_type || 'rfp',
@@ -227,129 +229,33 @@ document.addEventListener('alpine:init', () => {
     </div>
     @endif
 
-    {{-- ── Header / summary ───────────────────────────────────────────────── --}}
-    <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-                <p class="text-[10.5px] font-semibold uppercase tracking-wider text-omet-blue">Disbursement</p>
-                <h1 class="mt-0.5 text-lg font-semibold text-omet-navy">{{ $voucher->voucher_no }} · {{ $voucher->payee_name }}</h1>
-                <p class="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-gray-500">
-                    <span class="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 {{ $statusTone[$voucher->status] ?? 'bg-slate-100 text-slate-600 ring-slate-200' }}">{{ $voucher->statusLabel() }}</span>
-                    @if ($overdue)
-                        <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 ring-1 ring-rose-100">Overdue</span>
-                    @endif
-                    <span>Voucher date {{ $voucher->voucher_date->format('M d, Y') }}</span>
-                    @if ($voucher->due_date)<span>· Due {{ $voucher->due_date->format('M d, Y') }}</span>@endif
-                </p>
-            </div>
-            <div class="flex flex-wrap items-start gap-3">
-                <button type="button"
-                        @click="openEdit({{ \Illuminate\Support\Js::from($voucherPayload) }})"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
-                    <i data-lucide="pencil" class="h-3.5 w-3.5"></i> Edit
-                </button>
-            </div>
-            <div class="flex flex-wrap gap-4 text-right">
-                <div>
-                    <p class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Payable</p>
-                    <p class="text-[15px] font-semibold tabular-nums text-omet-navy">{{ $peso($voucher->amount_payable) }}</p>
-                </div>
-                <div>
-                    <p class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Paid</p>
-                    <p class="text-[15px] font-semibold tabular-nums {{ $amountPaid > 0 ? 'text-emerald-700' : 'text-slate-300' }}">{{ $amountPaid > 0 ? $peso($amountPaid) : '—' }}</p>
-                </div>
-                <div>
-                    <p class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Balance</p>
-                    <p class="text-[15px] font-semibold tabular-nums {{ $balance > 0 ? 'text-amber-700' : 'text-emerald-700' }}">{{ $peso($balance) }}</p>
-                </div>
-            </div>
+    {{-- ── Toolbar ─────────────────────────────────────────────────────── --}}
+    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div class="flex flex-wrap items-center gap-2">
+            <span class="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 {{ $statusTone[$voucher->status] ?? 'bg-slate-100 text-slate-600 ring-slate-200' }}">{{ $voucher->statusLabel() }}</span>
+            @if ($overdue)
+                <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 ring-1 ring-rose-100">Overdue</span>
+            @endif
+            <span class="text-[12px] text-slate-500">
+                Payable {{ $peso($voucher->amount_payable) }}
+                · Paid {{ $amountPaid > 0 ? $peso($amountPaid) : '—' }}
+                · Balance {{ $peso($balance) }}
+            </span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button" onclick="window.print()"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
+                <i data-lucide="printer" class="h-3.5 w-3.5"></i> Print
+            </button>
+            <a href="{{ route('vouchers.edit', $voucher) }}"
+               class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
+                <i data-lucide="pencil" class="h-3.5 w-3.5"></i> Edit
+            </a>
         </div>
     </div>
 
-    {{-- ── Voucher details ─────────────────────────────────────────────── --}}
-    <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Voucher information</h3>
-            <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Voucher date</dt>
-                    <dd class="text-[13px] text-slate-700">{{ $voucher->voucher_date->format('M d, Y') }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Due date</dt>
-                    <dd class="text-[13px] text-slate-700">{{ $voucher->due_date?->format('M d, Y') ?? '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Release date</dt>
-                    <dd class="text-[13px] text-slate-700">{{ $voucher->release_date?->format('M d, Y') ?? '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Project</dt>
-                    <dd class="text-[13px] text-slate-700">
-                        @if ($voucher->project)
-                            <a href="{{ route('projects.show', $voucher->project) }}" class="font-medium text-omet-blue hover:underline">{{ $voucher->project->name }}</a>
-                        @else — @endif
-                    </dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Category</dt>
-                    <dd class="text-[13px] text-slate-700">{{ $voucher->category?->fullLabel() ?? '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Type</dt>
-                    <dd class="text-[13px] text-slate-700">{{ $voucher->typeLabel() }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Mode of payment</dt>
-                    <dd class="text-[13px] text-slate-700">{{ $voucher->modeLabel() }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Source bank account</dt>
-                    <dd class="text-[13px] text-slate-700">
-                        @if ($voucher->sourceBankAccount)
-                            {{ $voucher->sourceBankAccount->entity?->name ? $voucher->sourceBankAccount->entity->name . ' — ' : '' }}{{ $voucher->sourceBankAccount->name }}
-                        @else — @endif
-                    </dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">PO Number</dt>
-                    <dd class="text-[13px] text-slate-700">{{ $voucher->po_number ?? '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Reference (PR / OR / SI)</dt>
-                    <dd class="text-[13px] text-slate-700">{{ $voucher->reference ?? '—' }}</dd>
-                </div>
-            </dl>
-        </div>
-
-        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h3 class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Notes &amp; remarks</h3>
-            <dl class="space-y-3">
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Particular / description</dt>
-                    <dd class="whitespace-pre-line text-[13px] text-slate-700">{{ $voucher->particular ?: '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Remarks</dt>
-                    <dd class="whitespace-pre-line text-[13px] text-slate-700">{{ $voucher->remarks ?: '—' }}</dd>
-                </div>
-                <div>
-                    <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Source of fund</dt>
-                    <dd class="whitespace-pre-line text-[13px] text-slate-700">{{ $voucher->source_of_fund ?: '—' }}</dd>
-                </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">OR / CR / SI / CI ref.</dt>
-                        <dd class="text-[13px] text-slate-700">{{ $voucher->or_ref ?: '—' }}</dd>
-                    </div>
-                    <div>
-                        <dt class="text-[10.5px] font-medium uppercase tracking-wide text-slate-400">Change / excess</dt>
-                        <dd class="text-[13px] text-slate-700">{{ $voucher->change_amount ? $peso($voucher->change_amount) : '—' }}</dd>
-                    </div>
-                </div>
-            </dl>
-        </div>
-    </div>
+    {{-- ── Check voucher document ──────────────────────────────────────── --}}
+    @include('vouchers.partials.check-voucher-document')
 
     {{-- ── Payment history ─────────────────────────────────────────────── --}}
     <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -404,69 +310,6 @@ document.addEventListener('alpine:init', () => {
                 </table>
             </div>
         @endif
-
-        {{-- Record payment --}}
-        @if ($voucher->isOpen())
-        <div class="mt-4 border-t border-slate-100 pt-4">
-            <h4 class="mb-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">Record a payment</h4>
-            <form method="POST" action="{{ route('vouchers.payments.store', $voucher) }}" class="space-y-3">
-                @csrf
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Pay from bank account *</label>
-                        <select name="bank_account_id" class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                            <option value="">— pick account (deducts its balance) —</option>
-                            @foreach ($accounts as $a)
-                                <option value="{{ $a->id }}" {{ old('bank_account_id', $voucher->source_bank_account_id) == $a->id ? 'selected' : '' }}>
-                                    {{ $a->entity?->name ? $a->entity->name . ' — ' : '' }}{{ $a->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Amount (PHP) *</label>
-                        <input type="number" step="0.01" min="0.01" name="amount" required value="{{ old('amount', $balance > 0 ? $balance : '') }}" placeholder="0.00"
-                               class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] tabular-nums text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Paid on *</label>
-                        <input type="date" name="paid_on" required value="{{ old('paid_on', now()->format('Y-m-d')) }}"
-                               class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Mode</label>
-                        <select name="mode" class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                            @foreach ($modes as $k => $label)
-                                <option value="{{ $k }}" {{ old('mode', $voucher->mode_of_payment) === $k ? 'selected' : '' }}>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Check no.</label>
-                        <input type="text" name="check_no" value="{{ old('check_no') }}"
-                               class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                    </div>
-                    <div>
-                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Check date <span class="text-gray-400">(future = PDC)</span></label>
-                        <input type="date" name="check_date" value="{{ old('check_date') }}"
-                               class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                    </div>
-                </div>
-                <div>
-                    <label class="mb-1 block text-[11px] font-medium text-gray-600">Notes</label>
-                    <input type="text" name="notes" value="{{ old('notes') }}"
-                           class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                </div>
-                <div class="flex justify-end">
-                    <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-emerald-700">
-                        <i data-lucide="banknote" class="h-3.5 w-3.5"></i> Record payment
-                    </button>
-                </div>
-            </form>
-        </div>
-        @endif
     </div>
 
     {{-- ── Attachments ──────────────────────────────────────────────────── --}}
@@ -477,7 +320,7 @@ document.addEventListener('alpine:init', () => {
         </h3>
 
         @if ($voucher->attachments->isNotEmpty())
-            <ul class="mb-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+            <ul class="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
                 @foreach ($voucher->attachments as $a)
                     <li class="flex items-center justify-between gap-3 px-3 py-2 text-[12px]">
                         <a href="{{ route('vouchers.attachments.download', $a) }}" class="flex min-w-0 items-center gap-2 text-slate-700 hover:text-omet-blue hover:underline">
@@ -488,76 +331,14 @@ document.addEventListener('alpine:init', () => {
                             <span>{{ $a->humanSize() }}</span>
                             <span>·</span>
                             <span>{{ $a->created_at->format('M d, Y') }}</span>
-                            <form method="POST" action="{{ route('vouchers.attachments.destroy', $a) }}"
-                                  onsubmit="return confirm('Remove &quot;{{ addslashes($a->original_name) }}&quot;?');">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="rounded-md p-1 text-slate-400 transition hover:bg-red-50 hover:text-red-600">
-                                    <i data-lucide="trash-2" class="h-3 w-3 pointer-events-none"></i>
-                                </button>
-                            </form>
                         </div>
                     </li>
                 @endforeach
             </ul>
         @else
-            <p class="mb-3 rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-[12px] text-slate-400">No supporting documents attached yet.</p>
+            <p class="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-[12px] text-slate-400">No supporting documents attached yet.</p>
         @endif
-
-        @error('file')
-            <p class="mb-2 text-[11px] font-medium text-red-600">{{ $message }}</p>
-        @enderror
-
-        <div x-data="{ fileError: '', checkFile(input) {
-            const f = input.files[0];
-            if (f && f.size > 10 * 1024 * 1024) {
-                this.fileError = f.name;
-                input.value = '';
-            } else {
-                this.fileError = '';
-            }
-        } }">
-            <form method="POST" enctype="multipart/form-data" action="{{ route('vouchers.attachments.store', $voucher) }}"
-                  class="flex items-center gap-2"
-                  @submit.prevent="if (fileError) { return; } $el.submit()">
-                @csrf
-                <input type="file" name="file" required
-                       @change="checkFile($event.target)"
-                       class="block w-full flex-1 text-[12px] text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-omet-blue/10 file:px-3 file:py-1.5 file:text-[11.5px] file:font-semibold file:text-omet-blue hover:file:bg-omet-blue/20">
-                <button type="submit" :disabled="!!fileError"
-                        class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-omet-blue px-3 py-1.5 text-[11.5px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue disabled:cursor-not-allowed disabled:opacity-50">
-                    <i data-lucide="upload" class="h-3.5 w-3.5"></i> Upload
-                </button>
-            </form>
-            <p class="mt-1 text-[10.5px] text-slate-400">PDF, image, Word or Excel files up to 10 MB — invoices, ORs, signed checks, approval slips.</p>
-
-            {{-- Error modal --}}
-            <div x-show="fileError" x-cloak
-                 class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-                <div class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
-                    <div class="flex items-start gap-3">
-                        <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100">
-                            <i data-lucide="alert-circle" class="h-5 w-5 text-red-600"></i>
-                        </div>
-                        <div>
-                            <h3 class="text-[14px] font-semibold text-slate-800">File too large</h3>
-                            <p class="mt-1 text-[12.5px] text-slate-600">
-                                <span class="font-medium" x-text="fileError"></span> exceeds the 10 MB limit.
-                                Please compress the file or split it into smaller parts before uploading.
-                            </p>
-                        </div>
-                    </div>
-                    <div class="mt-5 flex justify-end">
-                        <button @click="fileError = ''" type="button"
-                                class="rounded-lg bg-omet-blue px-5 py-2 text-[12.5px] font-semibold text-white transition hover:bg-omet-lightblue">
-                            OK
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
-
-@include('vouchers.partials.form-modal')
 
 </div>
 </x-app-layout>

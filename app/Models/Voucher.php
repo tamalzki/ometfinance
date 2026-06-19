@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
+
 class Voucher extends Model
 {
     use Auditable;
@@ -40,6 +41,12 @@ class Voucher extends Model
         'other'        => 'Other',
     ];
 
+    /** Office location / source of the voucher. */
+    public const SOURCES = [
+        'mindanao' => 'Main',
+        'bgc'      => 'BGC',
+    ];
+
     /** Modes of payment seen across the ledger. */
     public const MODES = [
         'cash'           => 'Cash',
@@ -55,7 +62,7 @@ class Voucher extends Model
 
     protected $fillable = [
         'voucher_no', 'voucher_date', 'due_date', 'release_date',
-        'payee_name', 'project_id', 'source_bank_account_id',
+        'payee_name', 'source', 'project_id', 'source_bank_account_id',
         'transaction_type', 'category_id', 'po_number', 'reference', 'amount_payable',
         'mode_of_payment', 'status', 'particular', 'notes',
         'remarks', 'source_of_fund', 'or_ref', 'change_amount',
@@ -103,12 +110,25 @@ class Voucher extends Model
         return $this->hasMany(VoucherAttachment::class)->latest();
     }
 
+    public function entries(): HasMany
+    {
+        return $this->hasMany(VoucherEntry::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     /**
-     * The project outflow this voucher posted, once it is fully Paid.
+     * All project outflow rows this voucher has posted (one per debit entry
+     * with a project when accounting entries are used; otherwise one row for
+     * the voucher-level project).
      */
+    public function projectExpenses(): HasMany
+    {
+        return $this->hasMany(ProjectExpense::class);
+    }
+
+    /** Legacy accessor — first expense row for vouchers without entries. */
     public function projectExpense(): HasOne
     {
-        return $this->hasOne(ProjectExpense::class);
+        return $this->hasOne(ProjectExpense::class)->whereNull('voucher_entry_id');
     }
 
     /* ── computed money helpers (encrypted → summed in PHP) ────────────── */
@@ -185,5 +205,10 @@ class Voucher extends Model
     public function modeLabel(): string
     {
         return self::MODES[$this->mode_of_payment] ?? ($this->mode_of_payment ? ucfirst($this->mode_of_payment) : '—');
+    }
+
+    public function sourceLabel(): string
+    {
+        return self::SOURCES[$this->source] ?? ($this->source ? ucfirst($this->source) : '—');
     }
 }

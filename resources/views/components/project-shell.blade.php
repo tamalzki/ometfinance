@@ -134,7 +134,7 @@
                     <i data-lucide="plus-circle" class="h-3.5 w-3.5"></i> {{ $inflowLabel }}
                 </button>
                 @endcan
-                <a href="{{ route('vouchers.index', ['project_id' => $project->id, 'new_voucher' => 1]) }}"
+                <a href="{{ route('vouchers.create', ['project_id' => $project->id]) }}"
                     class="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-xs font-bold text-white shadow ring-1 ring-red-700/20 hover:bg-red-700">
                     <i data-lucide="minus-circle" class="h-3.5 w-3.5"></i> Outflow
                 </a>

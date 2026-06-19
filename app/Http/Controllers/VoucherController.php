@@ -5,12 +5,16 @@ namespace App\Http\Controllers;
 use App\Models\BankAccount;
 use App\Models\Payee;
 use App\Models\Project;
+use App\Models\ProjectCollection;
+use App\Models\ProjectExpense;
 use App\Models\Voucher;
 use App\Models\VoucherAttachment;
+use App\Models\VoucherEntry;
 use App\Models\VoucherPayment;
 use App\Services\VoucherService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -35,8 +39,11 @@ class VoucherController extends Controller
         $status    = $request->query('status');
         $type      = $request->query('type');
         $projectId = $request->query('project_id');
+        $source    = $request->query('source');
+        $dateFrom  = $request->query('date_from');
+        $dateTo    = $request->query('date_to');
 
-        $query = Voucher::with(['project', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments'])
+        $query = Voucher::with(['project', 'entries.project', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments'])
             ->orderByDesc('voucher_date')
             ->orderByDesc('id');
 
@@ -45,6 +52,15 @@ class VoucherController extends Controller
         }
         if ($type && array_key_exists($type, Voucher::TYPES)) {
             $query->where('transaction_type', $type);
+        }
+        if ($source && array_key_exists($source, Voucher::SOURCES)) {
+            $query->where('source', $source);
+        }
+        if ($dateFrom) {
+            $query->whereDate('voucher_date', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('voucher_date', '<=', $dateTo);
         }
 
         $activeProject = $projectId ? Project::find($projectId) : null;
@@ -74,10 +90,56 @@ class VoucherController extends Controller
             'statuses'   => Voucher::STATUSES,
             'types'      => Voucher::TYPES,
             'modes'      => Voucher::MODES,
+            'sources'    => Voucher::SOURCES,
             'activeStatus'  => $status,
             'activeType'    => $type,
+            'activeSource'  => $source,
+            'activeDateFrom' => $dateFrom,
+            'activeDateTo'   => $dateTo,
             'activeProject' => $activeProject,
-            'newVoucher'    => $request->boolean('new_voucher'),
+        ]);
+    }
+
+    /* ── Create form (dedicated page) ─────────────────────────────────── */
+
+    public function create(Request $request): View
+    {
+        $projectId     = $request->query('project_id');
+        $activeProject = $projectId ? Project::find($projectId) : null;
+
+        $defaultSource = auth()->user()->role === 'bgc' ? 'bgc' : 'mindanao';
+
+        return view('vouchers.create', [
+            'projects'            => $this->projectsForPicker(),
+            'accounts'            => $this->accountsForPicker(),
+            'payees'              => $this->payeesForPicker(),
+            'categoriesForPicker' => \App\Models\ProjectCategory::selectOptions(),
+            'types'               => Voucher::TYPES,
+            'modes'               => Voucher::MODES,
+            'sources'             => Voucher::SOURCES,
+            'activeProject'       => $activeProject,
+            'defaultSource'       => $defaultSource,
+        ]);
+    }
+
+    /* ── Edit form (dedicated page) ─────────────────────────────────── */
+
+    public function edit(Voucher $voucher): View
+    {
+        $voucher->load(['entries.project', 'entries.category', 'project', 'sourceBankAccount']);
+
+        $defaultSource = auth()->user()->role === 'bgc' ? 'bgc' : 'mindanao';
+
+        return view('vouchers.edit', [
+            'voucher'             => $voucher,
+            'projects'            => $this->projectsForPicker(),
+            'accounts'            => $this->accountsForPicker(),
+            'payees'              => $this->payeesForPicker(),
+            'categoriesForPicker' => \App\Models\ProjectCategory::selectOptions(),
+            'types'               => Voucher::TYPES,
+            'modes'               => Voucher::MODES,
+            'sources'             => Voucher::SOURCES,
+            'defaultSource'       => $defaultSource,
         ]);
     }
 
@@ -85,7 +147,7 @@ class VoucherController extends Controller
 
     public function show(Voucher $voucher): View
     {
-        $voucher->load(['project', 'sourceBankAccount.entity', 'category.parent', 'payments.bankAccount', 'attachments']);
+        $voucher->load(['project', 'sourceBankAccount.entity', 'category.parent', 'payments.bankAccount', 'attachments', 'entries.project', 'entries.category']);
 
         return view('vouchers.show', [
             'voucher'            => $voucher,
@@ -95,6 +157,7 @@ class VoucherController extends Controller
             'categoriesForPicker' => \App\Models\ProjectCategory::selectOptions(),
             'types'              => Voucher::TYPES,
             'modes'              => Voucher::MODES,
+            'sources'            => Voucher::SOURCES,
         ]);
     }
 
@@ -153,13 +216,51 @@ class VoucherController extends Controller
         $data = $this->validateVoucher($request);
         $this->validateAttachments($request);
 
+        // Validate accounting entries when provided.
+        $entryRows = collect($request->input('entries', []))->filter(fn ($r) => ! empty($r['amount']) && (float) $r['amount'] > 0)->values()->all();
+
+        if (! empty($entryRows)) {
+            $request->validate([
+                'entries'                 => ['array'],
+                'entries.*.category_id'   => ['required', 'exists:project_categories,id'],
+                'entries.*.entry_type'    => ['required', 'in:debit,credit'],
+                'entries.*.amount'        => ['required', 'numeric', 'min:0.01'],
+                'entries.*.project_id'    => ['nullable', 'exists:projects,id'],
+                'entries.*.description'   => ['nullable', 'string', 'max:500'],
+            ]);
+
+            $totalDebit  = collect($entryRows)->where('entry_type', 'debit')->sum(fn ($r) => (float) $r['amount']);
+            $totalCredit = collect($entryRows)->where('entry_type', 'credit')->sum(fn ($r) => (float) $r['amount']);
+
+            if (abs($totalDebit - $totalCredit) > 0.005) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['entries' => 'Total Debit must equal Total Credit. Difference: ₱' . number_format(abs($totalDebit - $totalCredit), 2)]);
+            }
+        }
+
         $paidOnCreate = ($data['payment_status'] ?? 'unpaid') === 'paid';
         unset($data['payment_status']);
 
         $data['status'] = 'unpaid';
 
-        $voucher = Voucher::create($data);
-        $this->saveAttachmentsFromRequest($request, $voucher);
+        $voucher = DB::transaction(function () use ($request, $data, $entryRows) {
+            $voucher = Voucher::create($data);
+            $this->saveAttachmentsFromRequest($request, $voucher);
+
+            foreach ($entryRows as $i => $row) {
+                $voucher->entries()->create([
+                    'category_id'  => $row['category_id'],
+                    'entry_type'   => $row['entry_type'],
+                    'amount'       => (float) $row['amount'],
+                    'project_id'   => ($row['project_id'] ?? null) ?: null,
+                    'description'  => $row['description'] ?? null,
+                    'sort_order'   => $i,
+                ]);
+            }
+
+            return $voucher;
+        });
 
         // "Paid" at creation means the cash already went out — record the
         // full payment now so status, ledger and project outflow stay
@@ -173,7 +274,7 @@ class VoucherController extends Controller
             ]);
         }
 
-        return redirect()->route('vouchers.index', $voucher->project_id ? ['project_id' => $voucher->project_id] : [])
+        return redirect()->route('vouchers.show', $voucher)
             ->with('success', "Voucher {$voucher->voucher_no} for {$voucher->payee_name} created (₱" . number_format((float) $voucher->amount_payable, 2) . ')' . ($paidOnCreate ? ' and marked as paid.' : '.'));
     }
 
@@ -195,25 +296,63 @@ class VoucherController extends Controller
                 ->withErrors(['payment_status' => 'A fully paid voucher cannot be set back to unpaid here — reverse the payment(s) from the voucher view first.']);
         }
 
-        // Once money has moved against this voucher, the figures that drove
-        // that payment must stay put — changing them would desync the ledger
-        // and project postings the payment already created.
-        if ($voucher->payments()->exists()) {
-            unset($data['amount_payable'], $data['payee_name'], $data['project_id']);
+        // Replace accounting entries when submitted from the edit page.
+        $entryRows = collect($request->input('entries', []))
+            ->filter(fn ($r) => ! empty($r['amount']) && (float) $r['amount'] > 0)
+            ->values()->all();
+
+        if (! empty($entryRows)) {
+            $request->validate([
+                'entries'               => ['array'],
+                'entries.*.category_id' => ['required', 'exists:project_categories,id'],
+                'entries.*.entry_type'  => ['required', 'in:debit,credit'],
+                'entries.*.amount'      => ['required', 'numeric', 'min:0.01'],
+                'entries.*.project_id'  => ['nullable', 'exists:projects,id'],
+                'entries.*.description' => ['nullable', 'string', 'max:500'],
+            ]);
+
+            $totalDebit  = collect($entryRows)->where('entry_type', 'debit')->sum(fn ($r) => (float) $r['amount']);
+            $totalCredit = collect($entryRows)->where('entry_type', 'credit')->sum(fn ($r) => (float) $r['amount']);
+
+            if (abs($totalDebit - $totalCredit) > 0.005) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors(['entries' => 'Total Debit must equal Total Credit. Difference: ₱' . number_format(abs($totalDebit - $totalCredit), 2)]);
+            }
         }
 
-        $voucher->update($data);
-        $this->saveAttachmentsFromRequest($request, $voucher);
+        $sourceBankAccountId = $data['source_bank_account_id'] ?? $voucher->source_bank_account_id;
+        if ($markPaid && $voucher->balanceDue() > 0 && ! $sourceBankAccountId) {
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['source_bank_account_id' => 'Set a source bank account before marking this voucher as paid.']);
+        }
+
+        // All validation passed — persist everything atomically so a later
+        // failure (e.g. payment recording) can't leave a half-saved voucher.
+        DB::transaction(function () use ($request, $voucher, $data, $entryRows) {
+            $voucher->update($data);
+            $this->saveAttachmentsFromRequest($request, $voucher);
+
+            if (! empty($entryRows)) {
+                $voucher->entries()->delete();
+                foreach ($entryRows as $i => $row) {
+                    $voucher->entries()->create([
+                        'category_id' => $row['category_id'],
+                        'entry_type'  => $row['entry_type'],
+                        'amount'      => (float) $row['amount'],
+                        'project_id'  => ($row['project_id'] ?? null) ?: null,
+                        'description' => $row['description'] ?? null,
+                        'sort_order'  => $i,
+                    ]);
+                }
+            }
+        });
+
         $voucher->refresh();
 
         $paidOnUpdate = false;
         if ($markPaid && $voucher->balanceDue() > 0) {
-            if (! $voucher->source_bank_account_id) {
-                return redirect()->back()
-                    ->withInput()
-                    ->withErrors(['source_bank_account_id' => 'Set a source bank account before marking this voucher as paid.']);
-            }
-
             VoucherService::recordPayment($voucher, [
                 'bank_account_id' => $voucher->source_bank_account_id,
                 'paid_on'         => now()->toDateString(),
@@ -228,7 +367,7 @@ class VoucherController extends Controller
 
         $message = "Voucher {$voucher->voucher_no} updated" . ($paidOnUpdate ? ' and marked as paid.' : '.');
 
-        return redirect()->route('vouchers.index', $voucher->project_id ? ['project_id' => $voucher->project_id] : [])
+        return redirect()->route('vouchers.show', $voucher)
             ->with('success', $message);
     }
 
@@ -249,6 +388,12 @@ class VoucherController extends Controller
             return redirect()->back()
                 ->withErrors(['cancel' => "Voucher {$voucher->voucher_no} has payments recorded — reverse them before cancelling."]);
         }
+
+        // No payments exist at this point, so outflow/inflow rows should
+        // already be empty — this is a defensive cleanup in case any project
+        // rows were left behind by an earlier sync.
+        ProjectExpense::where('voucher_id', $voucher->id)->delete();
+        ProjectCollection::where('voucher_id', $voucher->id)->delete();
 
         $voucher->update(['status' => 'cancelled']);
 
@@ -329,6 +474,43 @@ class VoucherController extends Controller
         return redirect()->back()->with('success', 'Attachment removed.');
     }
 
+    /* ── Accounting Entries ─────────────────────────────────────────────── */
+
+    public function storeEntry(Request $request, Voucher $voucher): RedirectResponse
+    {
+        $data = $request->validate([
+            'category_id'  => ['required', 'exists:project_categories,id'],
+            'entry_type'   => ['required', 'in:debit,credit'],
+            'amount'       => ['required', 'numeric', 'min:0.01'],
+            'project_id'   => ['nullable', 'exists:projects,id'],
+            'description'  => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $data['project_id'] = ($data['project_id'] ?? null) ?: null;
+        $data['sort_order'] = $voucher->entries()->max('sort_order') + 1;
+
+        $voucher->entries()->create($data);
+
+        // Re-sync project outflow if this voucher has payments.
+        if ($voucher->amountPaid() > 0) {
+            VoucherService::recompute($voucher->fresh());
+        }
+
+        return redirect()->back()->with('success', ucfirst($data['entry_type']) . ' entry added.');
+    }
+
+    public function destroyEntry(VoucherEntry $entry): RedirectResponse
+    {
+        $voucher = $entry->voucher;
+        $entry->delete();
+
+        if ($voucher && $voucher->amountPaid() > 0) {
+            VoucherService::recompute($voucher->fresh());
+        }
+
+        return redirect()->back()->with('success', 'Entry removed.');
+    }
+
     /* ── helpers ───────────────────────────────────────────────────────── */
 
     private function validateVoucher(Request $request, ?Voucher $voucher = null): array
@@ -342,10 +524,11 @@ class VoucherController extends Controller
             'due_date'               => ['nullable', 'date'],
             'release_date'           => ['nullable', 'date'],
             'payee_name'             => ['required', 'string', 'max:255'],
+            'source'                 => ['nullable', Rule::in(array_keys(Voucher::SOURCES))],
             'project_id'             => ['nullable', 'exists:projects,id'],
             'source_bank_account_id' => ['nullable', 'exists:bank_accounts,id'],
             'transaction_type'       => ['nullable', Rule::in(array_keys(Voucher::TYPES))],
-            'category_id'            => ['required', 'exists:project_categories,id'],
+            'category_id'            => ['nullable', 'exists:project_categories,id'],
             'po_number'              => ['nullable', 'string', 'max:1000'],
             'reference'              => ['nullable', 'string', 'max:255'],
             'amount_payable'         => ['required', 'numeric', 'min:0.01'],

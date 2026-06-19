@@ -52,6 +52,7 @@
         'due_date'               => old('due_date', ''),
         'release_date'           => old('release_date', ''),
         'payee_name'             => old('payee_name', ''),
+        'source'                 => old('source', ''),
         'project_id'             => old('project_id', $activeProject ? (string) $activeProject->id : ''),
         'source_bank_account_id' => old('source_bank_account_id', ''),
         'transaction_type'       => old('transaction_type', 'rfp'),
@@ -72,12 +73,7 @@
     $oldPayee = $formDefaults['payee_name'];
     $payeeOtherInitial = $oldPayee !== '' && ! $payees->contains($oldPayee);
 
-    // Arriving from a project's Outflow tab via the "Outflow" button opens
-    // the Add Voucher form pre-filled with that project, per the "all
-    // outflow must have a voucher" rule.
-    $showFormInitial = $errors->any()
-        ? ! old('paying_voucher_id')
-        : ($newVoucher && $activeProject !== null);
+    $showFormInitial = $errors->any() && ! old('paying_voucher_id');
 @endphp
 
 <script>
@@ -89,6 +85,7 @@ document.addEventListener('alpine:init', () => {
         lockedFields: false,
         payVoucher: { id: null, no: '', payee: '', balance: 0 },
         q: '',
+        activeProjectId: @json($activeProject?->id),
 
         projects: @json($projectsForPicker),
         accounts: @json($accountsForPicker),
@@ -170,24 +167,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         openAdd() {
-            this.editId = null;
-            this.lockedFields = false;
-            this.payeeOther = false;
-            this.closeFormCombos();
-            this.f = {
-                voucher_no: '', voucher_date: @json(now()->format('Y-m-d')),
-                due_date: '', release_date: '', payee_name: '', project_id: '', source_bank_account_id: '',
-                transaction_type: 'rfp', category_id: '', po_number: '', reference: '', amount_payable: '',
-                mode_of_payment: 'cash', particular: '',
-                remarks: '', source_of_fund: '', or_ref: '', change_amount: '', notes: '',
-                payment_status: 'unpaid', voucher_status: '', balance_due: 0,
-                attachments: [],
-            };
-            this.showForm = true;
+            // Redirect to create page instead of opening modal.
+            window.location.href = '{{ route('vouchers.create') }}' + (this.activeProjectId ? '?project_id=' + this.activeProjectId : '');
         },
         openEdit(v) {
             this.editId = v.id;
-            this.lockedFields = !!v.has_payments;
+            this.lockedFields = false;
             this.payeeOther = !!v.payee_name && ! this.payees.some(p => p.label === v.payee_name);
             this.closeFormCombos();
             this.f = {
@@ -196,6 +181,7 @@ document.addEventListener('alpine:init', () => {
                 due_date: v.due_date || '',
                 release_date: v.release_date || '',
                 payee_name: v.payee_name,
+                source: v.source || '',
                 project_id: v.project_id ? String(v.project_id) : '',
                 source_bank_account_id: v.source_bank_account_id ? String(v.source_bank_account_id) : '',
                 transaction_type: v.transaction_type || 'rfp',
@@ -296,10 +282,10 @@ document.addEventListener('alpine:init', () => {
            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
             <i data-lucide="alarm-clock" class="h-4 w-4"></i> Payables
         </a>
-        <button type="button" @click="openAdd()"
-                class="inline-flex items-center gap-1.5 rounded-lg bg-omet-blue px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-omet-lightblue">
+        <a href="{{ route('vouchers.create', $activeProject ? ['project_id' => $activeProject->id] : []) }}"
+           class="inline-flex items-center gap-1.5 rounded-lg bg-omet-blue px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-omet-lightblue">
             <i data-lucide="plus" class="h-4 w-4"></i> Add Voucher
-        </button>
+        </a>
     </div>
 </div>
 
@@ -337,13 +323,43 @@ document.addEventListener('alpine:init', () => {
 
 {{-- ── Toolbar ──────────────────────────────────────────────────────────── --}}
 <div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
-    <div class="relative w-72">
+    <div class="relative w-64">
         <i data-lucide="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"></i>
         <input type="search" x-model="q" autocomplete="off" placeholder="Search payee, number, project"
                class="h-9 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-[12.5px] text-slate-700 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
     </div>
-    <form method="GET" action="{{ route('vouchers.index') }}" class="flex flex-wrap items-center gap-1.5">
-        {{-- Status select with aligned custom arrow --}}
+    <form method="GET" action="{{ route('vouchers.index') }}" class="flex flex-wrap items-center gap-1.5" id="filter-form">
+        @if ($activeProject)
+            <input type="hidden" name="project_id" value="{{ $activeProject->id }}">
+        @endif
+
+        {{-- Date from --}}
+        <div class="relative flex items-center">
+            <i data-lucide="calendar" class="pointer-events-none absolute left-2.5 h-3.5 w-3.5 text-slate-400"></i>
+            <input type="date" name="date_from" value="{{ $activeDateFrom }}"
+                   onchange="this.form.submit()"
+                   title="From date"
+                   class="h-9 rounded-lg border border-slate-200 bg-white pl-8 pr-2 text-[12px] text-slate-700 shadow-sm outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15 w-[140px]">
+        </div>
+        <span class="text-[11px] text-slate-400">to</span>
+        <input type="date" name="date_to" value="{{ $activeDateTo }}"
+               onchange="this.form.submit()"
+               title="To date"
+               class="h-9 rounded-lg border border-slate-200 bg-white px-2 text-[12px] text-slate-700 shadow-sm outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15 w-[140px]">
+
+        {{-- Source filter --}}
+        <div class="relative">
+            <select name="source" onchange="this.form.submit()"
+                    class="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-[12px] text-slate-700 shadow-sm outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
+                <option value="">All sources</option>
+                @foreach ($sources as $k => $label)
+                    <option value="{{ $k }}" @selected($activeSource === $k)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <i data-lucide="chevron-down" class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"></i>
+        </div>
+
+        {{-- Status filter --}}
         <div class="relative">
             <select name="status" onchange="this.form.submit()"
                     class="h-9 appearance-none rounded-lg border border-slate-200 bg-white pl-3 pr-8 text-[12px] text-slate-700 shadow-sm outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
@@ -354,9 +370,11 @@ document.addEventListener('alpine:init', () => {
             </select>
             <i data-lucide="chevron-down" class="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"></i>
         </div>
-        @if ($activeStatus)
-            <a href="{{ route('vouchers.index') }}" class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                <i data-lucide="x" class="h-3 w-3"></i> Clear
+
+        @if ($activeStatus || $activeSource || $activeDateFrom || $activeDateTo)
+            <a href="{{ route('vouchers.index', $activeProject ? ['project_id' => $activeProject->id] : []) }}"
+               class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                <i data-lucide="x" class="h-3 w-3"></i> Clear filters
             </a>
         @endif
     </form>
@@ -383,15 +401,19 @@ document.addEventListener('alpine:init', () => {
                     $amountPaid = $v->amountPaid();
                     $balance = $v->balanceDue();
                     $overdue = $v->isOverdue();
+                    $entryProjects = $v->entries->pluck('project')->filter()->unique('id')->values();
+                    $rowProjects   = $entryProjects->isNotEmpty() ? $entryProjects : ($v->project ? collect([$v->project]) : collect());
                     $haystack = strtolower(implode(' ', array_filter([
-                        $v->voucher_no, $v->payee_name, $v->project?->name, $v->typeLabel(), $v->po_number, $v->reference,
+                        $v->voucher_no, $v->payee_name, $rowProjects->pluck('name')->implode(' '), $v->typeLabel(), $v->po_number, $v->reference,
                     ])));
                     $payload = [
                         'id' => $v->id, 'voucher_no' => $v->voucher_no,
                         'voucher_date' => $v->voucher_date->format('Y-m-d'),
                         'due_date' => $v->due_date?->format('Y-m-d'),
                         'release_date' => $v->release_date?->format('Y-m-d'),
-                        'payee_name' => $v->payee_name, 'project_id' => $v->project_id,
+                        'payee_name' => $v->payee_name,
+                        'source' => $v->source,
+                        'project_id' => $v->project_id,
                         'source_bank_account_id' => $v->source_bank_account_id,
                         'transaction_type' => $v->transaction_type, 'category_id' => $v->category_id,
                         'po_number' => $v->po_number,
@@ -413,7 +435,12 @@ document.addEventListener('alpine:init', () => {
                 <tr class="group cursor-pointer transition-colors hover:bg-slate-50/70"
                     x-show="q.trim() === '' || @js($haystack).includes(q.trim().toLowerCase())"
                     @click="window.location = '{{ route('vouchers.show', $v->id) }}'">
-                    <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[12.5px] font-semibold text-slate-700 whitespace-nowrap">{{ $v->voucher_no }}</td>
+                    <td class="border-b border-slate-100 px-4 py-2.5 align-top whitespace-nowrap">
+                        <span class="block text-[12.5px] font-semibold text-slate-700">{{ $v->voucher_no }}</span>
+                        @if ($v->source)
+                            <span class="mt-1 inline-flex items-center rounded-full px-1 py-px text-[8px] font-semibold uppercase leading-tight tracking-wide ring-1 ring-inset {{ $v->source === 'bgc' ? 'bg-violet-50 text-violet-700 ring-violet-200' : 'bg-teal-50 text-teal-700 ring-teal-200' }}">{{ $v->sourceLabel() }}</span>
+                        @endif
+                    </td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top tabular-nums text-[12px] text-slate-600 whitespace-nowrap">{{ $v->voucher_date->format('M d, Y') }}</td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top tabular-nums text-[12px] whitespace-nowrap {{ $overdue ? 'font-semibold text-rose-600' : 'text-slate-600' }}">
                         {{ $v->due_date?->format('M d, Y') ?? '—' }}
@@ -426,9 +453,18 @@ document.addEventListener('alpine:init', () => {
                         @endif
                     </td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-[12.5px] text-slate-600">
-                        @if ($v->project)
-                            <a href="{{ route('projects.show', $v->project) }}" @click.stop class="text-[12px] font-medium text-omet-blue hover:underline">{{ $v->project->name }}</a>
-                        @else <span class="text-slate-300">—</span> @endif
+                        @if ($rowProjects->isNotEmpty())
+                            <div class="flex flex-wrap gap-1">
+                                @foreach ($rowProjects as $p)
+                                    <a href="{{ route('projects.show', $p) }}" @click.stop
+                                       class="inline-flex items-center rounded-md bg-omet-blue/5 px-1.5 py-0.5 text-[11px] font-medium text-omet-blue hover:underline">
+                                        {{ $p->name }}
+                                    </a>
+                                @endforeach
+                            </div>
+                        @else
+                            <span class="text-slate-300">—</span>
+                        @endif
                     </td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-right text-[12.5px] font-semibold tabular-nums text-omet-navy whitespace-nowrap">{{ $peso($v->amount_payable) }}</td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top">
@@ -442,10 +478,10 @@ document.addEventListener('alpine:init', () => {
                                     <i data-lucide="banknote" class="h-3 w-3 pointer-events-none"></i> Pay
                                 </button>
                             @endif
-                            <button type="button" @click="openEdit({{ \Illuminate\Support\Js::from($payload) }})"
-                                    class="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
+                            <a href="{{ route('vouchers.edit', $v) }}"
+                               class="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
                                 <i data-lucide="pencil" class="h-3 w-3 pointer-events-none"></i> Edit
-                            </button>
+                            </a>
                             @if ($v->isOpen() && $v->payments->isEmpty())
                                 <form method="POST" action="{{ route('vouchers.cancel', $v->id) }}"
                                       onsubmit="return confirm('Cancel voucher {{ $v->voucher_no }}? It will be excluded from payables and can be reactivated later.');" class="inline-flex shrink-0">
@@ -484,7 +520,6 @@ document.addEventListener('alpine:init', () => {
     </table>
 </div>
 
-@include('vouchers.partials.form-modal')
 @include('vouchers.partials.payment-modal')
 
 </div>

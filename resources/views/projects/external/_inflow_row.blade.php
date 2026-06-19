@@ -4,8 +4,9 @@
     $showType    = $showType ?? false;
     $filterable  = $filterable ?? false;
 
-    $isBorrowed = $c->isFromTransfer();
-    $rowType    = $isBorrowed ? 'funding' : 'collection';
+    $isBorrowed    = $c->isFromTransfer();
+    $isFromVoucher = $c->isFromVoucher();
+    $rowType       = $isBorrowed ? 'funding' : 'collection';
 
     // Labels depend on the project kind: manual rows on external projects are
     // client collections; on in-house projects they are legacy manual entries.
@@ -51,6 +52,18 @@
                 <i data-lucide="arrow-left-right" class="h-2.5 w-2.5"></i> {{ $typeLabel }}
             </span>
         @endif
+        @if ($isFromVoucher)
+            <a href="{{ route('vouchers.index', ['project_id' => $c->project_id]) }}"
+               class="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-omet-blue hover:bg-blue-200"
+               title="Posted by voucher {{ $c->voucher->voucher_no ?? '' }}">
+                <i data-lucide="receipt" class="h-2.5 w-2.5"></i> {{ $c->voucher->voucher_no ?? 'voucher' }}
+            </a>
+            @if ($c->voucher?->status === 'paid')
+                <span class="ml-1 inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-emerald-700" title="Voucher fully paid">Full</span>
+            @else
+                <span class="ml-1 inline-flex items-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-700" title="Voucher partially paid — balance still due">Partial</span>
+            @endif
+        @endif
     </td>
     <td class="px-4 py-2.5">
         <span class="block text-[13px] text-slate-700">{{ $c->bankAccount?->name ?? '—' }}</span>
@@ -64,6 +77,10 @@
     <td class="px-3 py-2.5 text-right">
         @if ($isBorrowed)
             <span class="inline-flex rounded p-1 text-slate-300" title="Reverse from the Transfers page">
+                <i data-lucide="lock" class="h-3 w-3"></i>
+            </span>
+        @elseif ($isFromVoucher)
+            <span class="inline-flex rounded p-1 text-slate-300" title="Reverse the payment from Daily Transactions to remove">
                 <i data-lucide="lock" class="h-3 w-3"></i>
             </span>
         @else
