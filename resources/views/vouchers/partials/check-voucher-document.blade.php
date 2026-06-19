@@ -7,7 +7,17 @@
     $totalDebit  = $voucher->entries->where('entry_type', 'debit')->sum(fn ($e) => (float) $e->amount);
     $totalCredit = $voucher->entries->where('entry_type', 'credit')->sum(fn ($e) => (float) $e->amount);
     $isBalanced  = abs($totalDebit - $totalCredit) < 0.005;
-    $displayAmount = $isBalanced && $totalDebit > 0 ? $totalDebit : (float) $voucher->amount_payable;
+
+    // Amount actually disbursed — the "Cash in Bank" credit line, not the
+    // full debit total, since other credits (e.g. WHT) are withheld, not paid out.
+    $cashAmount = $voucher->entries
+        ->where('entry_type', 'credit')
+        ->filter(fn ($e) => str_contains(strtolower($e->category?->name ?? ''), 'cash in bank'))
+        ->sum(fn ($e) => (float) $e->amount);
+
+    $displayAmount = $cashAmount > 0
+        ? $cashAmount
+        : ($isBalanced && $totalDebit > 0 ? $totalDebit : (float) $voucher->amount_payable);
 
     $termsLabel = '—';
     if ($voucher->due_date) {

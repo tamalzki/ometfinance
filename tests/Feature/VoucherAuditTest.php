@@ -158,6 +158,39 @@ class VoucherAuditTest extends TestCase
         $this->assertNull(Voucher::where('voucher_no', 'AUDIT-HTTP-002')->first());
     }
 
+    public function test_check_voucher_amount_due_is_cash_in_bank_not_total_debit(): void
+    {
+        $user = User::factory()->create(['role' => 'admin']);
+
+        $materials = ProjectCategory::create(['name' => 'Materials']);
+        $directMaterials = ProjectCategory::create(['name' => 'Direct Materials', 'parent_id' => $materials->id]);
+        $inputVat = ProjectCategory::create(['name' => 'Input VAT - Materials', 'parent_id' => $materials->id]);
+        $wht = ProjectCategory::create(['name' => 'WHT - Materials', 'parent_id' => $materials->id]);
+        $cashInBank = ProjectCategory::create(['name' => 'Cash in Bank']);
+
+        $voucher = Voucher::create([
+            'voucher_no' => 'AUDIT-CASH-001',
+            'voucher_date' => now(),
+            'payee_name' => 'CISA Marketing Company, Inc.',
+            'amount_payable' => 2735.36,
+            'status' => 'unpaid',
+            'mode_of_payment' => 'cash',
+        ]);
+        $voucher->entries()->create(['entry_type' => 'debit', 'amount' => 2464.29, 'category_id' => $directMaterials->id]);
+        $voucher->entries()->create(['entry_type' => 'debit', 'amount' => 295.71, 'category_id' => $inputVat->id]);
+        $voucher->entries()->create(['entry_type' => 'credit', 'amount' => 24.64, 'category_id' => $wht->id]);
+        $voucher->entries()->create(['entry_type' => 'credit', 'amount' => 2735.36, 'category_id' => $cashInBank->id]);
+
+        $html = $this->actingAs($user)->get(route('vouchers.show', $voucher))->assertOk()->getContent();
+
+        $this->assertStringContainsString('Amount Due:</td>', $html);
+        $this->assertMatchesRegularExpression(
+            '/Amount Due:<\/td>\s*<td[^>]*>₱2,735\.36<\/td>/',
+            $html,
+            'Amount Due should reflect the Cash in Bank credit line (2,735.36), not the total debit (2,760.00).'
+        );
+    }
+
     public function test_update_rejects_unbalanced_entries_without_partial_save(): void
     {
         $user = User::factory()->create(['role' => 'admin']);

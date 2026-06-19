@@ -102,6 +102,14 @@ document.addEventListener('alpine:init', () => {
         get netAmount() {
             return this.isBalanced ? this.totalDebit : null;
         },
+        // Amount actually disbursed — the "Cash in Bank" credit line, not the
+        // full debit total, since other credits (e.g. WHT) are withheld, not paid out.
+        get amountPayable() {
+            const cash = this.entries
+                .filter(e => e.entry_type === 'credit' && this.catLabel(e).toLowerCase().includes('cash in bank'))
+                .reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+            return cash > 0 ? cash : this.totalDebit;
+        },
 
         addEntry(type) {
             this.entries.push({
@@ -211,7 +219,7 @@ document.addEventListener('alpine:init', () => {
     <form method="POST" action="{{ route('vouchers.store') }}" enctype="multipart/form-data"
           @submit.prevent="validateAndSubmit($el)">
         @csrf
-        <input type="hidden" name="amount_payable" :value="totalDebit > 0 ? totalDebit.toFixed(2) : ''">
+        <input type="hidden" name="amount_payable" :value="amountPayable > 0 ? amountPayable.toFixed(2) : ''">
 
         {{-- ══════════════════════════════════════════════════════════════
              CARD 1 — Voucher Information
@@ -743,7 +751,7 @@ document.addEventListener('alpine:init', () => {
                     <p class="mt-0.5 text-[10.5px] text-slate-500">Auto-calculated from the accounting entries above</p>
                     @error('amount_payable')<p class="mt-0.5 text-[10.5px] font-medium text-red-600">{{ $message }}</p>@enderror
                 </div>
-                <p class="text-2xl font-bold tabular-nums text-omet-navy" x-text="formatPeso(totalDebit)"></p>
+                <p class="text-2xl font-bold tabular-nums text-omet-navy" x-text="formatPeso(amountPayable)"></p>
             </div>
 
             {{-- Contextual hint why button is disabled --}}
