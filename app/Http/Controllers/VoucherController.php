@@ -133,6 +133,9 @@ class VoucherController extends Controller
             'types'               => Voucher::TYPES,
             'modes'               => Voucher::MODES,
             'sources'             => Voucher::SOURCES,
+            'sourceDocuments'     => Voucher::SOURCE_DOCUMENTS,
+            'sourceDocumentIcons' => Voucher::SOURCE_DOCUMENT_ICONS,
+            'sourceDocumentNumberLabels' => Voucher::SOURCE_DOCUMENT_NUMBER_LABELS,
             'activeProject'       => $activeProject,
             'defaultSource'       => $defaultSource,
             'lockedSource'        => $lockedSource,
@@ -157,6 +160,9 @@ class VoucherController extends Controller
             'types'               => Voucher::TYPES,
             'modes'               => Voucher::MODES,
             'sources'             => Voucher::SOURCES,
+            'sourceDocuments'     => Voucher::SOURCE_DOCUMENTS,
+            'sourceDocumentIcons' => Voucher::SOURCE_DOCUMENT_ICONS,
+            'sourceDocumentNumberLabels' => Voucher::SOURCE_DOCUMENT_NUMBER_LABELS,
             'defaultSource'       => $defaultSource,
             'lockedSource'        => $lockedSource,
         ]);
@@ -587,8 +593,9 @@ class VoucherController extends Controller
             'project_id'             => ['nullable', 'exists:projects,id'],
             'source_bank_account_id' => ['nullable', 'exists:bank_accounts,id'],
             'transaction_type'       => ['nullable', Rule::in(array_keys(Voucher::TYPES))],
+            'source_document_type'   => ['nullable', Rule::in(array_keys(Voucher::SOURCE_DOCUMENTS))],
             'category_id'            => ['nullable', 'exists:project_categories,id'],
-            'po_number'              => ['nullable', 'string', 'max:1000'],
+            'po_number'              => ['nullable', 'required_with:source_document_type', 'string', 'max:1000'],
             'reference'              => ['nullable', 'string', 'max:255'],
             'amount_payable'         => ['required', 'numeric', 'min:0.01'],
             'mode_of_payment'        => ['nullable', Rule::in(array_keys(Voucher::MODES))],
@@ -652,13 +659,21 @@ class VoucherController extends Controller
         $request->validate(['reason' => ['required', 'string', 'max:1000']]);
         unset($data['payment_status']);
 
-        $voucher->approvalRequests()->create([
-            'type'            => VoucherRequest::TYPE_EDIT,
-            'requested_by'    => auth()->id(),
-            'reason'          => $request->input('reason'),
-            'payload'         => $data,
-            'entries_payload' => $entryRows ?: null,
-        ]);
+        DB::transaction(function () use ($request, $voucher, $data, $entryRows) {
+            // Attachments aren't part of the gated edit payload — save them
+            // straight onto the voucher (like the direct-edit path does) so
+            // the CFO can already see them while reviewing the rest of the
+            // proposed change, instead of the files being silently dropped.
+            $this->saveAttachmentsFromRequest($request, $voucher);
+
+            $voucher->approvalRequests()->create([
+                'type'            => VoucherRequest::TYPE_EDIT,
+                'requested_by'    => auth()->id(),
+                'reason'          => $request->input('reason'),
+                'payload'         => $data,
+                'entries_payload' => $entryRows ?: null,
+            ]);
+        });
 
         return redirect()->route('vouchers.show', $voucher)
             ->with('success', "Edit request for voucher {$voucher->voucher_no} submitted for CFO approval.");

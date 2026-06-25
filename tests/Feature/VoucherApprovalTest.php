@@ -67,6 +67,45 @@ class VoucherApprovalTest extends TestCase
         $this->assertEquals(0, VoucherRequest::where('voucher_id', $voucher->id)->count());
     }
 
+    public function test_store_with_source_document_type_requires_document_number(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $payload = $this->basePayload('APR-002B') + $this->withAttachment();
+        $payload['source_document_type'] = 'purchase_order';
+
+        $response = $this->actingAs($admin)->post(route('vouchers.store'), $payload);
+
+        $response->assertSessionHasErrors('po_number');
+        $this->assertNull(Voucher::where('voucher_no', 'APR-002B')->first());
+    }
+
+    public function test_store_with_source_document_type_and_number_succeeds(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $payload = $this->basePayload('APR-002C') + $this->withAttachment();
+        $payload['source_document_type'] = 'purchase_order';
+        $payload['po_number'] = 'PO-9001';
+
+        $this->actingAs($admin)->post(route('vouchers.store'), $payload);
+
+        $voucher = Voucher::where('voucher_no', 'APR-002C')->first();
+        $this->assertNotNull($voucher);
+        $this->assertEquals('purchase_order', $voucher->source_document_type);
+        $this->assertEquals('PO-9001', $voucher->po_number);
+    }
+
+    public function test_store_without_source_document_type_does_not_require_document_number(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)->post(route('vouchers.store'), $this->basePayload('APR-002D') + $this->withAttachment());
+
+        $voucher = Voucher::where('voucher_no', 'APR-002D')->first();
+        $this->assertNotNull($voucher);
+    }
+
     public function test_accounting_update_on_approved_voucher_creates_edit_request_and_leaves_voucher_untouched(): void
     {
         $staff = User::factory()->create(['role' => 'accounting']);
@@ -87,6 +126,27 @@ class VoucherApprovalTest extends TestCase
         $this->assertNotNull($request);
         $this->assertEquals(VoucherRequest::TYPE_EDIT, $request->type);
         $this->assertEquals('Changed Payee', $request->payload['payee_name']);
+    }
+
+    public function test_accounting_edit_request_attachment_is_saved_and_visible_to_cfo(): void
+    {
+        $staff = User::factory()->create(['role' => 'accounting']);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $voucher = Voucher::create($this->basePayload('APR-003B') + ['approval_status' => 'approved']);
+
+        $payload = $this->basePayload('APR-003B') + $this->withAttachment();
+        $payload['reason'] = 'Replacing the invoice scan';
+
+        $this->actingAs($staff)->put(route('vouchers.update', $voucher), $payload);
+
+        $voucher->refresh();
+        $this->assertEquals(1, $voucher->attachments()->count(), 'New attachment must be saved, not silently dropped.');
+
+        $request = VoucherRequest::where('voucher_id', $voucher->id)->first();
+        $response = $this->actingAs($admin)->get(route('voucher-requests.show', $request));
+        $response->assertOk();
+        $response->assertSee('invoice.pdf');
     }
 
     public function test_accounting_update_on_own_pending_voucher_applies_directly(): void
@@ -296,6 +356,49 @@ class VoucherApprovalTest extends TestCase
 
         $this->actingAs($admin)->get(route('voucher-requests.index'))->assertOk();
         $this->actingAs($cfo)->get(route('voucher-requests.index'))->assertOk();
+    }
+
+    public function test_approval_queue_approved_tab_lists_only_decided_requests(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $staff = User::factory()->create(['role' => 'accounting']);
+
+        $pendingVoucher = Voucher::create($this->basePayload('APR-070') + ['approval_status' => 'pending']);
+        $pendingVoucher->approvalRequests()->create(['type' => VoucherRequest::TYPE_CREATE, 'requested_by' => $staff->id]);
+
+        $approvedVoucher = Voucher::create($this->basePayload('APR-071') + ['approval_status' => 'approved']);
+        $approvedRequest = $approvedVoucher->approvalRequests()->create([
+            'type' => VoucherRequest::TYPE_CREATE, 'requested_by' => $staff->id,
+            'status' => VoucherRequest::STATUS_APPROVED, 'reviewed_by' => $admin->id, 'reviewed_at' => now(),
+        ]);
+
+        $pending = $this->actingAs($admin)->get(route('voucher-requests.index'));
+        $pending->assertOk();
+        $pending->assertSee('APR-070');
+        $pending->assertDontSee('APR-071');
+
+        $approved = $this->actingAs($admin)->get(route('voucher-requests.index', ['status' => 'approved']));
+        $approved->assertOk();
+        $approved->assertSee('APR-071');
+        $approved->assertDontSee('APR-070');
+    }
+
+    public function test_already_reviewed_request_does_not_show_approve_reject_buttons(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $staff = User::factory()->create(['role' => 'accounting']);
+
+        $voucher = Voucher::create($this->basePayload('APR-072') + ['approval_status' => 'approved']);
+        $request = $voucher->approvalRequests()->create([
+            'type' => VoucherRequest::TYPE_CREATE, 'requested_by' => $staff->id,
+            'status' => VoucherRequest::STATUS_APPROVED, 'reviewed_by' => $admin->id, 'reviewed_at' => now(),
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('voucher-requests.show', $request));
+
+        $response->assertOk();
+        $response->assertDontSee('Confirm Reject');
+        $response->assertSee('Approved');
     }
 
     public function test_review_screen_renders_for_each_request_type(): void

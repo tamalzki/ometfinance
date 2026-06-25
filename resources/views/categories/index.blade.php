@@ -8,6 +8,8 @@
         formAction: '{{ route('categories.store') }}',
         formMethod: 'POST',
         parentName: '',
+        editingSub: false,
+        parentOptions: @js($categories->map(fn ($c) => ['id' => $c->id, 'name' => $c->name])->values()),
         openAdd() {
             this.editId = null;
             this.f = { name: '', parent_id: '' };
@@ -15,6 +17,7 @@
             this.formAction = '{{ route('categories.store') }}';
             this.formMethod = 'POST';
             this.parentName = '';
+            this.editingSub = false;
             this.showForm = true;
         },
         openAddSub(parent) {
@@ -24,6 +27,7 @@
             this.formAction = '{{ route('categories.store') }}';
             this.formMethod = 'POST';
             this.parentName = parent.name;
+            this.editingSub = false;
             this.showForm = true;
         },
         openEdit(cat, parentName) {
@@ -33,6 +37,7 @@
             this.formAction = '/categories/' + cat.id;
             this.formMethod = 'PUT';
             this.parentName = parentName || '';
+            this.editingSub = !!parentName;
             this.showForm = true;
         }
     }"
@@ -180,14 +185,26 @@
                 <template x-if="formMethod === 'PUT'">
                     <input type="hidden" name="_method" value="PUT">
                 </template>
-                <template x-if="f.parent_id">
+                <template x-if="!editingSub && f.parent_id">
                     <input type="hidden" name="parent_id" :value="f.parent_id">
                 </template>
 
-                <template x-if="parentName">
+                <template x-if="parentName && !editingSub">
                     <p class="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                         Sub-category of <span class="font-semibold text-slate-700" x-text="parentName"></span>
                     </p>
+                </template>
+
+                <template x-if="editingSub">
+                    <div>
+                        <x-label for="cat_parent" :value="__('Parent category *')" />
+                        <select id="cat_parent" name="parent_id" x-model="f.parent_id" required
+                                class="mt-1 block w-full rounded-lg border-gray-300 text-sm">
+                            <template x-for="opt in parentOptions" :key="opt.id">
+                                <option :value="String(opt.id)" x-text="opt.name"></option>
+                            </template>
+                        </select>
+                    </div>
                 </template>
 
                 <div>

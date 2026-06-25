@@ -57,12 +57,16 @@
 
 {{-- ── Request panel ────────────────────────────────────────────────────── --}}
 <div class="min-h-0 flex-1 overflow-y-auto rounded-xl border border-indigo-100 bg-white shadow-sm">
-    <div class="flex items-center gap-3 border-b border-gray-100 bg-indigo-50/40 px-5 py-4">
-        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100">
-            <i data-lucide="shield-question" class="h-4 w-4 text-indigo-600"></i>
+    <div class="flex items-center gap-3 border-b border-gray-100 px-5 py-4 {{ $voucherRequest->isPending() ? 'bg-indigo-50/40' : ($voucherRequest->isRejected() ? 'bg-rose-50/40' : 'bg-emerald-50/40') }}">
+        <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full {{ $voucherRequest->isPending() ? 'bg-indigo-100' : ($voucherRequest->isRejected() ? 'bg-rose-100' : 'bg-emerald-100') }}">
+            <i data-lucide="{{ $voucherRequest->isPending() ? 'shield-question' : ($voucherRequest->isRejected() ? 'x-circle' : 'check-circle-2') }}"
+               class="h-4 w-4 {{ $voucherRequest->isPending() ? 'text-indigo-600' : ($voucherRequest->isRejected() ? 'text-rose-600' : 'text-emerald-600') }}"></i>
         </span>
         <div>
-            <h3 class="text-sm font-semibold text-omet-navy">{{ $voucherRequest->typeLabel() }} — CFO Approval Needed</h3>
+            <h3 class="text-sm font-semibold text-omet-navy">
+                {{ $voucherRequest->typeLabel() }} —
+                {{ $voucherRequest->isPending() ? 'CFO Approval Needed' : ($voucherRequest->isRejected() ? 'Rejected' : 'Approved') }}
+            </h3>
             <p class="text-[11px] text-slate-500">
                 Requested by <span class="font-medium text-slate-700">{{ $voucherRequest->requestedBy->name ?? '—' }}</span>
                 · {{ $voucherRequest->created_at->format('M j, Y \a\t g:i A') }}
@@ -205,6 +209,7 @@
         </blockquote>
         @endif
 
+        @if ($voucherRequest->isPending())
         {{-- ── Actions ──────────────────────────────────────────────────── --}}
         <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
             <form method="POST" action="{{ route('voucher-requests.approve', $voucherRequest) }}">
@@ -235,6 +240,23 @@
                 <button type="submit" class="rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-rose-700">Confirm Reject</button>
             </div>
         </form>
+        @else
+        {{-- ── Already reviewed ─────────────────────────────────────────── --}}
+        <div class="mt-5 flex flex-wrap items-center gap-2 rounded-lg border px-4 py-3 {{ $voucherRequest->isRejected() ? 'border-rose-200 bg-rose-50/40' : 'border-emerald-200 bg-emerald-50/40' }}">
+            <i data-lucide="{{ $voucherRequest->isRejected() ? 'x-circle' : 'check-circle-2' }}"
+               class="h-4 w-4 shrink-0 {{ $voucherRequest->isRejected() ? 'text-rose-600' : 'text-emerald-600' }}"></i>
+            <p class="text-[12.5px] {{ $voucherRequest->isRejected() ? 'text-rose-700' : 'text-emerald-700' }}">
+                {{ $voucherRequest->isRejected() ? 'Rejected' : 'Approved' }}
+                by <span class="font-semibold">{{ $voucherRequest->reviewedBy->name ?? '—' }}</span>
+                @if ($voucherRequest->reviewed_at)
+                    on {{ $voucherRequest->reviewed_at->format('M j, Y \a\t g:i A') }}
+                @endif
+                @if ($voucherRequest->isRejected() && $voucherRequest->review_note)
+                    — "{{ $voucherRequest->review_note }}"
+                @endif
+            </p>
+        </div>
+        @endif
 
     </div>
 </div>

@@ -37,6 +37,13 @@
         'search' => strtolower($key . ' ' . $label),
     ])->values();
 
+    $sourceDocumentsForPicker = collect($sourceDocuments)->map(fn ($label, $key) => [
+        'id'          => $key,
+        'label'       => $label,
+        'icon'        => $sourceDocumentIcons[$key] ?? 'file-question',
+        'numberLabel' => $sourceDocumentNumberLabels[$key] ?? 'Reference Number',
+    ])->values();
+
     $oldPayee = old('payee_name', '');
     $payeeOtherInitial = $oldPayee !== '' && ! $payees->contains($oldPayee);
 @endphp
@@ -50,6 +57,7 @@ document.addEventListener('alpine:init', () => {
         modes:      @json($modesForPicker),
         payees:     @json($payeesForPicker),
         categories: @json($categoriesForPicker),
+        sourceDocuments: @json($sourceDocumentsForPicker),
 
         acctOpen: false,  acctQuery: '',
         typeOpen: false,  typeQuery: '',
@@ -67,6 +75,7 @@ document.addEventListener('alpine:init', () => {
             source:                 @json(old('source', $defaultSource)),
             source_bank_account_id: @json(old('source_bank_account_id', '')),
             transaction_type:       @json(old('transaction_type', 'rfp')),
+            source_document_type:   @json(old('source_document_type', '')),
             po_number:              @json(old('po_number', '')),
             reference:              @json(old('reference', '')),
             mode_of_payment:        @json(old('mode_of_payment', 'cash')),
@@ -153,6 +162,14 @@ document.addEventListener('alpine:init', () => {
             const m = this.modes.find(x => x.id === id);
             return m ? m.label : '— select mode —';
         },
+        docLabel(id) {
+            const d = this.sourceDocuments.find(x => x.id === id);
+            return d ? d.label : '';
+        },
+        docNumberLabel(id) {
+            const d = this.sourceDocuments.find(x => x.id === id);
+            return d ? d.numberLabel : 'Reference Number';
+        },
 
         entryError: '',
         validateAndSubmit(form) {
@@ -215,7 +232,15 @@ document.addEventListener('alpine:init', () => {
     {{-- Page header --}}
     <div>
         <p class="text-[10.5px] font-semibold uppercase tracking-wider text-omet-blue">Disbursement</p>
-        <h1 class="mt-0.5 text-xl font-bold tracking-tight text-omet-navy">New Voucher</h1>
+        <div class="mt-0.5 flex flex-wrap items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight text-omet-navy">New Voucher</h1>
+            <template x-if="f.source_document_type">
+                <span class="inline-flex items-center gap-1 rounded-full bg-omet-blue/10 px-2.5 py-1 text-[11px] font-semibold text-omet-blue">
+                    <i data-lucide="tag" class="h-3 w-3"></i>
+                    <span x-text="docLabel(f.source_document_type)"></span>
+                </span>
+            </template>
+        </div>
         <p class="mt-0.5 text-xs text-slate-500">Records a payable. Money only leaves when you record a payment.</p>
     </div>
 
@@ -225,9 +250,44 @@ document.addEventListener('alpine:init', () => {
         <input type="hidden" name="amount_payable" :value="amountPayable > 0 ? amountPayable.toFixed(2) : ''">
 
         {{-- ══════════════════════════════════════════════════════════════
+             CARD 0 — Source Document for Voucher
+        ══════════════════════════════════════════════════════════════ --}}
+        <div class="rounded-xl border border-slate-200 border-t-4 border-t-amber-400 bg-white shadow-sm">
+            <div class="flex items-center gap-2 border-b border-slate-100 px-6 py-3">
+                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-50">
+                    <i data-lucide="tag" class="h-3 w-3 text-amber-600"></i>
+                </span>
+                <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Source Document for Voucher</h2>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 px-6 py-3">
+                <input type="hidden" name="source_document_type" :value="f.source_document_type">
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach ($sourceDocuments as $key => $label)
+                        <button type="button" @click="f.source_document_type = '{{ $key }}'"
+                                class="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition"
+                                :class="f.source_document_type === '{{ $key }}' ? 'border-omet-blue bg-omet-blue/5 text-omet-blue' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'">
+                            <i data-lucide="{{ $sourceDocumentIcons[$key] ?? 'file-question' }}" class="h-3.5 w-3.5"></i>
+                            {{ $label }}
+                        </button>
+                    @endforeach
+                </div>
+                <div x-show="!!f.source_document_type" x-cloak class="flex items-center gap-2 border-l border-slate-200 pl-3">
+                    <label class="shrink-0 text-[11px] font-medium text-gray-600">
+                        <span x-text="docNumberLabel(f.source_document_type)"></span> <span class="text-red-400">*</span>
+                    </label>
+                    <input type="text" name="po_number" x-model="f.po_number" placeholder="Number"
+                           :required="!!f.source_document_type"
+                           class="h-8 w-36 rounded-lg border border-slate-200 bg-white px-2.5 text-[12.5px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
+                </div>
+            </div>
+            @error('source_document_type')<p class="px-6 pb-2.5 -mt-1 text-[10.5px] text-red-600">{{ $message }}</p>@enderror
+            @error('po_number')<p class="px-6 pb-2.5 -mt-1 text-[10.5px] text-red-600">{{ $message }}</p>@enderror
+        </div>
+
+        {{-- ══════════════════════════════════════════════════════════════
              CARD 1 — Voucher Information
         ══════════════════════════════════════════════════════════════ --}}
-        <div class="rounded-xl border border-slate-200 border-t-4 border-t-omet-blue bg-white shadow-sm">
+        <div class="mt-5 rounded-xl border border-slate-200 border-t-4 border-t-omet-blue bg-white shadow-sm">
 
             <div class="flex items-center gap-2.5 border-b border-slate-100 px-6 py-4">
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-omet-blue/10">
@@ -459,17 +519,10 @@ document.addEventListener('alpine:init', () => {
                         </div>
                     </div>
 
-                    <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium text-gray-600">PO Number</label>
-                            <input type="text" name="po_number" x-model="f.po_number" placeholder="e.g. PO-6132"
-                                   class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                        </div>
-                        <div>
-                            <label class="mb-1 block text-[11px] font-medium text-gray-600">Reference <span class="text-gray-400">(PR / OR / SI)</span></label>
-                            <input type="text" name="reference" x-model="f.reference"
-                                   class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
-                        </div>
+                    <div class="mt-4 max-w-sm">
+                        <label class="mb-1 block text-[11px] font-medium text-gray-600">Reference <span class="text-gray-400">(PR / OR / SI)</span></label>
+                        <input type="text" name="reference" x-model="f.reference"
+                               class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
                     </div>
                 </div>
 

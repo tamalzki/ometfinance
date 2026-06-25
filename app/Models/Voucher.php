@@ -47,6 +47,30 @@ class Voucher extends Model
         'bgc'      => 'BGC',
     ];
 
+    /** The originating paper/document that triggered this voucher — tagging only. */
+    public const SOURCE_DOCUMENTS = [
+        'rfp'            => 'Request For Payment',
+        'purchase_order' => 'Purchase Order',
+        'travel_request' => 'Travel Request Form',
+        'contract'       => 'Contract',
+    ];
+
+    /** Lucide icon name per source-document type — shared by the picker UI and table badges. */
+    public const SOURCE_DOCUMENT_ICONS = [
+        'rfp'            => 'wallet',
+        'purchase_order' => 'shopping-cart',
+        'travel_request' => 'plane',
+        'contract'       => 'file-signature',
+    ];
+
+    /** Label for the reference-number field that appears once a source document is picked (stored in po_number). */
+    public const SOURCE_DOCUMENT_NUMBER_LABELS = [
+        'rfp'            => 'RFP Number',
+        'purchase_order' => 'PO Number',
+        'travel_request' => 'TRF Number',
+        'contract'       => 'Contract Number',
+    ];
+
     /** Modes of payment seen across the ledger. */
     public const MODES = [
         'cash'           => 'Cash',
@@ -63,7 +87,7 @@ class Voucher extends Model
     protected $fillable = [
         'voucher_no', 'voucher_date', 'due_date', 'release_date',
         'payee_name', 'source', 'project_id', 'source_bank_account_id',
-        'transaction_type', 'category_id', 'po_number', 'reference', 'amount_payable',
+        'transaction_type', 'source_document_type', 'category_id', 'po_number', 'reference', 'amount_payable',
         'mode_of_payment', 'status', 'approval_status', 'particular', 'notes',
         'remarks', 'source_of_fund', 'or_ref', 'change_amount',
         'prepared_by', 'approved_by', 'approved_at',
@@ -265,6 +289,16 @@ class Voucher extends Model
     public function typeLabel(): string
     {
         return self::TYPES[$this->transaction_type] ?? ($this->transaction_type ? ucfirst($this->transaction_type) : '—');
+    }
+
+    public function sourceDocumentLabel(): string
+    {
+        return self::SOURCE_DOCUMENTS[$this->source_document_type] ?? ($this->source_document_type ? ucfirst($this->source_document_type) : '—');
+    }
+
+    public function sourceDocumentIcon(): string
+    {
+        return self::SOURCE_DOCUMENT_ICONS[$this->source_document_type] ?? 'file-question';
     }
 
     public function modeLabel(): string

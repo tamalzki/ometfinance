@@ -14,6 +14,8 @@
         'edit'   => 'Edit Request',
         'delete' => 'Delete Request',
     ];
+
+    $activeStatus = $activeStatus ?? 'pending';
 @endphp
 
 <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">
@@ -28,7 +30,9 @@
 <div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
     <div class="min-w-0">
         <h1 class="text-xl font-bold tracking-tight text-omet-navy">Voucher Approvals</h1>
-        <p class="text-xs text-slate-500">Requests submitted by Accounting Staff, awaiting your review.</p>
+        <p class="text-xs text-slate-500">
+            {{ $activeStatus === 'approved' ? 'Requests you have already approved.' : 'Requests submitted by Accounting Staff, awaiting your review.' }}
+        </p>
     </div>
 </div>
 
@@ -40,7 +44,7 @@
         ['key' => 'delete', 'label' => 'Delete Request', 'icon' => 'trash-2', 'tone' => 'rose'],
     ] as $card)
     @php
-        $active = ($activeType ?? '') === $card['key'];
+        $active = $activeStatus === 'pending' && ($activeType ?? '') === $card['key'];
         $tone = [
             'amber'  => ['count' => 'text-amber-700',  'icon' => 'bg-amber-50 text-amber-600',  'active' => 'border-amber-200 ring-1 ring-amber-200'],
             'violet' => ['count' => 'text-violet-700', 'icon' => 'bg-violet-50 text-violet-600', 'active' => 'border-violet-200 ring-1 ring-violet-200'],
@@ -64,12 +68,20 @@
     <a href="{{ route('voucher-requests.index', $key ? ['type' => $key] : []) }}"
         @class([
             '-mb-px flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm transition-colors duration-150',
-            'border-b-2 border-omet-blue text-omet-blue font-semibold' => ($activeType ?? '') === $key,
-            'border-b-2 border-transparent text-gray-500 hover:text-omet-navy hover:border-gray-300' => ($activeType ?? '') !== $key,
+            'border-b-2 border-omet-blue text-omet-blue font-semibold' => $activeStatus === 'pending' && ($activeType ?? '') === $key,
+            'border-b-2 border-transparent text-gray-500 hover:text-omet-navy hover:border-gray-300' => ! ($activeStatus === 'pending' && ($activeType ?? '') === $key),
         ])>
         {{ $label }}
     </a>
     @endforeach
+    <a href="{{ route('voucher-requests.index', ['status' => 'approved']) }}"
+        @class([
+            '-mb-px ml-auto flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm transition-colors duration-150',
+            'border-b-2 border-emerald-500 text-emerald-600 font-semibold' => $activeStatus === 'approved',
+            'border-b-2 border-transparent text-gray-500 hover:text-omet-navy hover:border-gray-300' => $activeStatus !== 'approved',
+        ])>
+        <i data-lucide="check-circle-2" class="h-3.5 w-3.5"></i> Approved
+    </a>
 </nav>
 
 {{-- ── Table ────────────────────────────────────────────────────────────── --}}
@@ -83,7 +95,10 @@
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Amount</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Requested by</th>
                 <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Requested</th>
-                <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Review</th>
+                @if ($activeStatus === 'approved')
+                <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Approved by</th>
+                @endif
+                <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">{{ $activeStatus === 'approved' ? 'View' : 'Review' }}</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 bg-white">
@@ -97,18 +112,26 @@
                 <td class="px-4 py-2.5 text-right tabular-nums text-[13px] font-semibold text-omet-navy">{{ $req->voucher ? $peso($req->voucher->amount_payable) : '—' }}</td>
                 <td class="px-4 py-2.5 text-[13px] text-slate-600">{{ $req->requestedBy->name ?? '—' }}</td>
                 <td class="px-4 py-2.5 text-[12px] text-slate-500">{{ $req->created_at->format('M j, Y g:i A') }}</td>
+                @if ($activeStatus === 'approved')
+                <td class="px-4 py-2.5 text-[12px] text-slate-500">
+                    {{ $req->reviewedBy->name ?? '—' }}
+                    @if ($req->reviewed_at)
+                        <span class="block text-[10.5px] text-slate-400">{{ $req->reviewed_at->format('M j, Y g:i A') }}</span>
+                    @endif
+                </td>
+                @endif
                 <td class="px-4 py-2.5 text-right">
                     <a href="{{ route('voucher-requests.show', $req) }}"
                        class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
-                        <i data-lucide="eye" class="h-3 w-3"></i> Review
+                        <i data-lucide="eye" class="h-3 w-3"></i> {{ $activeStatus === 'approved' ? 'View' : 'Review' }}
                     </a>
                 </td>
             </tr>
             @empty
             <tr>
-                <td colspan="7" class="px-6 py-14 text-center">
+                <td colspan="{{ $activeStatus === 'approved' ? 8 : 7 }}" class="px-6 py-14 text-center">
                     <i data-lucide="inbox" class="mx-auto mb-2 h-8 w-8 text-slate-200"></i>
-                    <p class="text-sm text-slate-500">Nothing pending review.</p>
+                    <p class="text-sm text-slate-500">{{ $activeStatus === 'approved' ? 'No approved requests yet.' : 'Nothing pending review.' }}</p>
                 </td>
             </tr>
             @endforelse

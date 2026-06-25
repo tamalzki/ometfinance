@@ -12,10 +12,15 @@ class VoucherRequestController extends Controller
 {
     public function index(Request $request): View
     {
-        $type = $request->query('type');
+        $type   = $request->query('type');
+        $status = $request->query('status', VoucherRequest::STATUS_PENDING);
 
-        $query = VoucherRequest::with(['voucher' => fn ($q) => $q->withTrashed(), 'requestedBy'])
-            ->where('status', VoucherRequest::STATUS_PENDING)
+        if (! in_array($status, [VoucherRequest::STATUS_PENDING, VoucherRequest::STATUS_APPROVED, VoucherRequest::STATUS_REJECTED], true)) {
+            $status = VoucherRequest::STATUS_PENDING;
+        }
+
+        $query = VoucherRequest::with(['voucher' => fn ($q) => $q->withTrashed(), 'requestedBy', 'reviewedBy'])
+            ->where('status', $status)
             ->latest();
 
         if ($type && in_array($type, [VoucherRequest::TYPE_CREATE, VoucherRequest::TYPE_EDIT, VoucherRequest::TYPE_DELETE], true)) {
@@ -31,9 +36,10 @@ class VoucherRequestController extends Controller
         ];
 
         return view('vouchers.requests.index', [
-            'requests'   => $requests,
-            'counts'     => $counts,
-            'activeType' => $type,
+            'requests'     => $requests,
+            'counts'       => $counts,
+            'activeType'   => $type,
+            'activeStatus' => $status,
         ]);
     }
 

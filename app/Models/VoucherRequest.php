@@ -52,6 +52,8 @@ class VoucherRequest extends Model
     }
 
     public function isPending(): bool  { return $this->status === self::STATUS_PENDING; }
+    public function isApproved(): bool { return $this->status === self::STATUS_APPROVED; }
+    public function isRejected(): bool { return $this->status === self::STATUS_REJECTED; }
     public function isCreate(): bool   { return $this->type === self::TYPE_CREATE; }
     public function isEdit(): bool     { return $this->type === self::TYPE_EDIT; }
     public function isDelete(): bool   { return $this->type === self::TYPE_DELETE; }

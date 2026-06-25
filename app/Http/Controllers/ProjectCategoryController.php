@@ -56,11 +56,33 @@ class ProjectCategoryController extends Controller
 
     public function update(Request $request, ProjectCategory $category): RedirectResponse
     {
-        $validated = $request->validate([
+        $rules = [
             'name' => ['required', 'string', 'max:100'],
-        ]);
+        ];
 
-        $exists = ProjectCategory::where('parent_id', $category->parent_id)
+        // Only sub-categories may be reassigned to a different parent — top-level
+        // categories stay top-level through this form.
+        if ($category->parent_id !== null) {
+            $rules['parent_id'] = ['required', 'exists:project_categories,id'];
+        }
+
+        $validated = $request->validate($rules);
+
+        $parentId = $category->parent_id;
+
+        if (array_key_exists('parent_id', $validated)) {
+            $parent = ProjectCategory::findOrFail($validated['parent_id']);
+
+            if ($parent->parent_id !== null) {
+                return back()->withErrors([
+                    'parent_id' => 'Sub-categories can only be one level deep.',
+                ])->withInput();
+            }
+
+            $parentId = $parent->id;
+        }
+
+        $exists = ProjectCategory::where('parent_id', $parentId)
             ->whereRaw('LOWER(name) = ?', [mb_strtolower($validated['name'])])
             ->where('id', '!=', $category->id)
             ->exists();
@@ -71,7 +93,10 @@ class ProjectCategoryController extends Controller
             ])->withInput();
         }
 
-        $category->update(['name' => $validated['name']]);
+        $category->update([
+            'name'      => $validated['name'],
+            'parent_id' => $parentId,
+        ]);
 
         return redirect()->route('categories.index')->with('success', 'Category updated.');
     }
