@@ -86,4 +86,104 @@ class ProjectManagementTest extends TestCase
             'client_name' => 'Onemark (internal)',
         ]);
     }
+
+    public function test_allocation_page_shows_running_cost_and_adjust_action()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/projects', [
+            'name'           => 'Allocation Demo',
+            'kind'           => 'external',
+            'client_name'    => 'Beta Corp',
+            'status'         => 'active',
+            'contract_value' => 100000,
+        ]);
+
+        $project = Project::where('name', 'Allocation Demo')->first();
+
+        $response = $this->actingAs($user)->get("/projects/{$project->id}/allocation");
+
+        $response->assertOk();
+        $response->assertSee('Allocated');
+        $response->assertSee('Running cost');
+        $response->assertSee('Adjust allocation');
+    }
+
+    public function test_allocation_percentages_can_be_adjusted()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/projects', [
+            'name'           => 'Allocation Adjust',
+            'kind'           => 'external',
+            'client_name'    => 'Gamma LLC',
+            'status'         => 'active',
+            'contract_value' => 100000,
+        ]);
+
+        $project = Project::where('name', 'Allocation Adjust')->first();
+        $sop     = $project->allocationLines()->where('label', 'SOP')->first();
+
+        $this->actingAs($user)->put("/projects/{$project->id}/allocation", [
+            'percents' => [$sop->id => 20],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertEquals(0.20, (float) $sop->refresh()->percent);
+    }
+
+    public function test_allocation_cannot_be_adjusted_past_100_percent(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/projects', [
+            'name'           => 'Allocation Overshoot',
+            'kind'           => 'external',
+            'client_name'    => 'Epsilon Co',
+            'status'         => 'active',
+            'contract_value' => 100000,
+        ]);
+
+        $project = Project::where('name', 'Allocation Overshoot')->first();
+        $bucketLines = $project->allocationLines()
+            ->where('row_kind', \App\Models\ProjectAllocationLine::KIND_ALLOCATION)
+            ->get();
+
+        $percents = $bucketLines->mapWithKeys(fn ($l) => [$l->id => $l->percent * 100])->all();
+        $sop = $bucketLines->firstWhere('label', 'SOP');
+        $percents[$sop->id] = 50; // pushes the bucket total well past 100%
+
+        $response = $this->actingAs($user)->put("/projects/{$project->id}/allocation", [
+            'percents' => $percents,
+        ]);
+
+        $response->assertSessionHasErrors('percents');
+        $this->assertEquals(0.15, (float) $sop->refresh()->percent, 'Allocation must not change when over 100%.');
+    }
+
+    public function test_allocation_adjustment_appears_in_history()
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/projects', [
+            'name'           => 'Allocation History',
+            'kind'           => 'external',
+            'client_name'    => 'Delta Inc',
+            'status'         => 'active',
+            'contract_value' => 100000,
+        ]);
+
+        $project = Project::where('name', 'Allocation History')->first();
+        $sop     = $project->allocationLines()->where('label', 'SOP')->first();
+
+        $this->actingAs($user)->put("/projects/{$project->id}/allocation", [
+            'percents' => [$sop->id => 25],
+        ]);
+
+        $response = $this->actingAs($user)->get("/projects/{$project->id}/allocation");
+
+        $response->assertOk();
+        $response->assertSee('Allocation history');
+        $response->assertSee('15.00%');
+        $response->assertSee('25.00%');
+    }
 }

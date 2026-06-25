@@ -2,6 +2,8 @@
     $totalCollected  = $project->totalCollected();
     $clientCollected = $project->totalClientCollected();
     $borrowedTotal   = $project->totalBorrowed();
+    $totalDeductions = $project->totalDeductions();
+    $netCollected    = $project->totalClientCollectedNet();
 
     $clientRows   = $project->collections->filter(fn ($c) => ! $c->isFromTransfer());
     $borrowedRows = $project->collections->filter(fn ($c) => $c->isFromTransfer());
@@ -89,6 +91,18 @@
                         <tr>
                             <td colspan="4" class="px-4 py-2 text-[11px] uppercase tracking-wide text-slate-400">Borrowed / support</td>
                             <td class="px-4 py-2 text-right text-[12px] font-semibold tabular-nums text-indigo-700">₱{{ number_format($borrowedTotal, 2) }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                        @endif
+                        @if ($totalDeductions > 0)
+                        <tr>
+                            <td colspan="4" class="px-4 py-2 text-[11px] uppercase tracking-wide text-amber-600">Deductions (VAT/WHT/retention/recoupment/other)</td>
+                            <td class="px-4 py-2 text-right text-[12px] font-semibold tabular-nums text-amber-700">−₱{{ number_format($totalDeductions, 2) }}</td>
+                            <td colspan="2"></td>
+                        </tr>
+                        <tr>
+                            <td colspan="4" class="px-4 py-2 text-[11px] uppercase tracking-wide text-slate-400">Real collection (net of deductions)</td>
+                            <td class="px-4 py-2 text-right text-[12px] font-semibold tabular-nums text-emerald-700">₱{{ number_format($netCollected, 2) }}</td>
                             <td colspan="2"></td>
                         </tr>
                         @endif

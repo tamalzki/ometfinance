@@ -64,7 +64,7 @@ class Voucher extends Model
         'voucher_no', 'voucher_date', 'due_date', 'release_date',
         'payee_name', 'source', 'project_id', 'source_bank_account_id',
         'transaction_type', 'category_id', 'po_number', 'reference', 'amount_payable',
-        'mode_of_payment', 'status', 'particular', 'notes',
+        'mode_of_payment', 'status', 'approval_status', 'particular', 'notes',
         'remarks', 'source_of_fund', 'or_ref', 'change_amount',
     ];
 
@@ -115,6 +115,34 @@ class Voucher extends Model
         return $this->hasMany(VoucherEntry::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function approvalRequests(): HasMany
+    {
+        return $this->hasMany(VoucherRequest::class)->latest();
+    }
+
+    /** The single edit/delete request awaiting CFO review, if any. */
+    public function pendingRequest(): ?VoucherRequest
+    {
+        return $this->relationLoaded('approvalRequests')
+            ? $this->approvalRequests->firstWhere('status', VoucherRequest::STATUS_PENDING)
+            : $this->approvalRequests()->where('status', VoucherRequest::STATUS_PENDING)->first();
+    }
+
+    /** Most recently submitted request of any status — used to surface a fresh CFO decision. */
+    public function latestRequest(): ?VoucherRequest
+    {
+        return $this->relationLoaded('approvalRequests')
+            ? $this->approvalRequests->first()
+            : $this->approvalRequests()->first();
+    }
+
+    /** True when the most recent CFO decision on this voucher was a rejection (and nothing newer supersedes it). */
+    public function hasFreshRejection(): bool
+    {
+        $latest = $this->latestRequest();
+        return $latest !== null && $latest->status === VoucherRequest::STATUS_REJECTED;
+    }
+
     /**
      * All project outflow rows this voucher has posted (one per debit entry
      * with a project when accounting entries are used; otherwise one row for
@@ -148,6 +176,25 @@ class Voucher extends Model
     public function isOpen(): bool
     {
         return in_array($this->status, ['unpaid', 'partial', 'pdc'], true);
+    }
+
+    public function isPendingApproval(): bool
+    {
+        return $this->approval_status === 'pending';
+    }
+
+    public function isApprovalRejected(): bool
+    {
+        return $this->approval_status === 'rejected';
+    }
+
+    public function approvalStatusLabel(): string
+    {
+        return match ($this->approval_status) {
+            'pending'  => 'For Approval',
+            'rejected' => 'Rejected',
+            default    => 'Approved',
+        };
     }
 
     public function isOverdue(): bool

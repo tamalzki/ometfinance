@@ -9,9 +9,153 @@
         return '₱' . number_format($v, 0);
     };
     $isCfo = auth()->user()->isCfo();
+    $isAccounting = $isAccounting ?? false;
+
+    $reqTypeTone = [
+        'create' => 'bg-amber-50 text-amber-700 ring-amber-100',
+        'edit'   => 'bg-violet-50 text-violet-700 ring-violet-100',
+        'delete' => 'bg-rose-50 text-rose-600 ring-rose-100',
+    ];
+    $reqStatusTone = [
+        'pending'  => 'bg-amber-50 text-amber-700 ring-amber-100',
+        'approved' => 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+        'rejected' => 'bg-rose-50 text-rose-600 ring-rose-100',
+    ];
 @endphp
 
-@if ($isCfo)
+@if ($isAccounting)
+{{-- ══════════════════════════════════════════════════════════════════════ --}}
+{{-- ACCOUNTING STAFF DASHBOARD — scoped to vouchers they submitted          --}}
+{{-- ══════════════════════════════════════════════════════════════════════ --}}
+<div class="flex flex-col gap-5">
+
+    {{-- Heading --}}
+    <div class="flex flex-wrap items-end justify-between gap-3">
+        <div>
+            <h1 class="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">My vouchers</h1>
+            <p class="mt-0.5 text-sm text-slate-500">Status of everything you've submitted for CFO approval.</p>
+        </div>
+        <a href="{{ route('vouchers.create') }}"
+           class="inline-flex items-center gap-1.5 rounded-lg bg-omet-blue px-3 py-1.5 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-omet-navy">
+            <i data-lucide="plus" class="h-3.5 w-3.5"></i> New voucher
+        </a>
+    </div>
+
+    {{-- Needs attention — rejected items --}}
+    @if ($needsAttention->isNotEmpty())
+    <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 shadow-sm">
+        <p class="mb-2 flex items-center gap-1.5 text-[12.5px] font-semibold text-rose-700">
+            <i data-lucide="alert-triangle" class="h-4 w-4"></i> Needs your attention — rejected by CFO
+        </p>
+        <ul class="divide-y divide-rose-100">
+            @foreach ($needsAttention as $r)
+            <li class="flex items-start justify-between gap-3 py-2 text-[12.5px]">
+                <div class="min-w-0">
+                    @if ($r->voucher && ! $r->voucher->trashed())
+                    <a href="{{ route('vouchers.show', $r->voucher) }}" class="font-semibold text-rose-800 hover:underline">
+                        {{ $r->typeLabel() }} · {{ $r->voucher->voucher_no }} — {{ $r->voucher->payee_name }}
+                    </a>
+                    @else
+                    <p class="font-semibold text-rose-800">{{ $r->typeLabel() }} · {{ $r->voucher?->voucher_no ?? '— deleted —' }}</p>
+                    @endif
+                    <p class="mt-0.5 italic text-rose-600">"{{ $r->review_note ?: 'No reason was provided.' }}"</p>
+                </div>
+                <span class="shrink-0 text-[11px] text-rose-400">{{ $r->reviewed_at?->diffForHumans() }}</span>
+            </li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
+
+    {{-- KPI cards --}}
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Submitted</p>
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                    <i data-lucide="file-text" class="h-4 w-4"></i>
+                </span>
+            </div>
+            <p class="mt-3 text-2xl font-bold tabular-nums tracking-tight text-slate-900">{{ $acctStats['submitted'] }}</p>
+            <p class="mt-1 text-[11.5px] text-slate-500">Total vouchers you've created</p>
+        </div>
+
+        @php $hasPending = $acctStats['pending'] > 0; @endphp
+        <div class="rounded-xl border {{ $hasPending ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-white' }} p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-wider {{ $hasPending ? 'text-amber-700' : 'text-slate-500' }}">Awaiting CFO</p>
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg {{ $hasPending ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-500' }}">
+                    <i data-lucide="hourglass" class="h-4 w-4"></i>
+                </span>
+            </div>
+            <p class="mt-3 text-2xl font-bold tabular-nums tracking-tight {{ $hasPending ? 'text-amber-800' : 'text-slate-900' }}">{{ $acctStats['pending'] }}</p>
+            <p class="mt-1 text-[11.5px] {{ $hasPending ? 'text-amber-700' : 'text-slate-500' }}">Requests pending review</p>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Approved</p>
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                    <i data-lucide="check-circle-2" class="h-4 w-4"></i>
+                </span>
+            </div>
+            <p class="mt-3 text-2xl font-bold tabular-nums tracking-tight text-slate-900">{{ $acctStats['approved'] }}</p>
+            <p class="mt-1 text-[11.5px] text-slate-500">{{ $peso($acctStats['outstanding']) }} still outstanding</p>
+        </div>
+
+        @php $hasRejected = $acctStats['rejected'] > 0; @endphp
+        <div class="rounded-xl border {{ $hasRejected ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white' }} p-4 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+                <p class="text-[11px] font-semibold uppercase tracking-wider {{ $hasRejected ? 'text-rose-600' : 'text-slate-500' }}">Rejected</p>
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg {{ $hasRejected ? 'bg-rose-100 text-rose-600' : 'bg-slate-100 text-slate-500' }}">
+                    <i data-lucide="x-circle" class="h-4 w-4"></i>
+                </span>
+            </div>
+            <p class="mt-3 text-2xl font-bold tabular-nums tracking-tight {{ $hasRejected ? 'text-rose-700' : 'text-slate-900' }}">{{ $acctStats['rejected'] }}</p>
+            <p class="mt-1 text-[11.5px] {{ $hasRejected ? 'text-rose-600' : 'text-slate-500' }}">Not approved by CFO</p>
+        </div>
+    </div>
+
+    {{-- Recent submissions --}}
+    <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div class="mb-3 flex items-end justify-between">
+            <div>
+                <h3 class="text-base font-semibold text-slate-900">Recent submissions</h3>
+                <p class="mt-0.5 text-xs text-slate-500">Your last 8 requests and their CFO status.</p>
+            </div>
+            <a href="{{ route('vouchers.index') }}" class="text-xs font-semibold text-omet-blue hover:text-omet-lightblue">View all</a>
+        </div>
+
+        @if ($recentRequests->isEmpty())
+            <p class="rounded-md border border-dashed border-slate-200 px-4 py-6 text-center text-xs text-slate-500">
+                You haven't submitted any vouchers yet.
+            </p>
+        @else
+            <ul class="divide-y divide-slate-100">
+                @foreach ($recentRequests as $r)
+                <li class="flex items-center justify-between gap-3 py-2.5">
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold ring-1 {{ $reqTypeTone[$r->type] ?? '' }}">{{ $r->typeLabel() }}</span>
+                            @if ($r->voucher && ! $r->voucher->trashed())
+                            <a href="{{ route('vouchers.show', $r->voucher) }}" class="truncate text-[13px] font-medium text-slate-800 hover:text-omet-blue">
+                                {{ $r->voucher->voucher_no }} · {{ $r->voucher->payee_name }}
+                            </a>
+                            @else
+                            <span class="truncate text-[13px] font-medium text-slate-500">{{ $r->voucher?->voucher_no ?? '— deleted —' }}</span>
+                            @endif
+                        </div>
+                        <p class="mt-0.5 truncate text-[11px] text-slate-500">{{ $r->created_at->format('M d, Y g:i A') }}</p>
+                    </div>
+                    <span class="shrink-0 inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 {{ $reqStatusTone[$r->status] ?? '' }}">{{ ucfirst($r->status) }}</span>
+                </li>
+                @endforeach
+            </ul>
+        @endif
+    </div>
+</div>
+
+@elseif ($isCfo)
 {{-- ══════════════════════════════════════════════════════════════════════ --}}
 {{-- CFO DASHBOARD — disbursements-focused view                           --}}
 {{-- ══════════════════════════════════════════════════════════════════════ --}}

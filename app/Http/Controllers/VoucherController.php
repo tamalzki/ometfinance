@@ -11,6 +11,7 @@ use App\Models\Voucher;
 use App\Models\VoucherAttachment;
 use App\Models\VoucherEntry;
 use App\Models\VoucherPayment;
+use App\Models\VoucherRequest;
 use App\Services\VoucherService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -43,9 +44,16 @@ class VoucherController extends Controller
         $dateFrom  = $request->query('date_from');
         $dateTo    = $request->query('date_to');
 
-        $query = Voucher::with(['project', 'entries.project', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments'])
+        $query = Voucher::with(['project', 'entries.project', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments', 'approvalRequests'])
             ->orderByDesc('voucher_date')
             ->orderByDesc('id');
+
+        // Accounting Staff only ever see what they themselves submitted.
+        if (auth()->user()->isAccounting()) {
+            $query->whereHas('approvalRequests', fn ($q) => $q
+                ->where('type', VoucherRequest::TYPE_CREATE)
+                ->where('requested_by', auth()->id()));
+        }
 
         if ($status && array_key_exists($status, Voucher::STATUSES)) {
             $query->where('status', $status);
@@ -69,7 +77,14 @@ class VoucherController extends Controller
         }
 
         $vouchers = $query->get();
-        $all      = Voucher::with('payments')->get();
+
+        $allQuery = Voucher::with('payments')->where('approval_status', 'approved');
+        if (auth()->user()->isAccounting()) {
+            $allQuery->whereHas('approvalRequests', fn ($q) => $q
+                ->where('type', VoucherRequest::TYPE_CREATE)
+                ->where('requested_by', auth()->id()));
+        }
+        $all = $allQuery->get();
 
         // Encrypted columns — every money aggregate is computed in PHP.
         $summary = [
@@ -107,7 +122,8 @@ class VoucherController extends Controller
         $projectId     = $request->query('project_id');
         $activeProject = $projectId ? Project::find($projectId) : null;
 
-        $defaultSource = auth()->user()->role === 'bgc' ? 'bgc' : 'mindanao';
+        $lockedSource  = auth()->user()->lockedSource();
+        $defaultSource = $lockedSource ?? 'mindanao';
 
         return view('vouchers.create', [
             'projects'            => $this->projectsForPicker(),
@@ -119,6 +135,7 @@ class VoucherController extends Controller
             'sources'             => Voucher::SOURCES,
             'activeProject'       => $activeProject,
             'defaultSource'       => $defaultSource,
+            'lockedSource'        => $lockedSource,
         ]);
     }
 
@@ -128,7 +145,8 @@ class VoucherController extends Controller
     {
         $voucher->load(['entries.project', 'entries.category', 'project', 'sourceBankAccount']);
 
-        $defaultSource = auth()->user()->role === 'bgc' ? 'bgc' : 'mindanao';
+        $lockedSource  = auth()->user()->lockedSource();
+        $defaultSource = $lockedSource ?? 'mindanao';
 
         return view('vouchers.edit', [
             'voucher'             => $voucher,
@@ -140,6 +158,7 @@ class VoucherController extends Controller
             'modes'               => Voucher::MODES,
             'sources'             => Voucher::SOURCES,
             'defaultSource'       => $defaultSource,
+            'lockedSource'        => $lockedSource,
         ]);
     }
 
@@ -147,7 +166,7 @@ class VoucherController extends Controller
 
     public function show(Voucher $voucher): View
     {
-        $voucher->load(['project', 'sourceBankAccount.entity', 'category.parent', 'payments.bankAccount', 'attachments', 'entries.project', 'entries.category']);
+        $voucher->load(['project', 'sourceBankAccount.entity', 'category.parent', 'payments.bankAccount', 'attachments', 'entries.project', 'entries.category', 'approvalRequests']);
 
         return view('vouchers.show', [
             'voucher'            => $voucher,
@@ -167,11 +186,19 @@ class VoucherController extends Controller
     {
         $bucket = $request->query('bucket');
 
-        $open = Voucher::with(['project', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments'])
+        $openQuery = Voucher::with(['project', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments'])
             ->whereIn('status', ['unpaid', 'partial', 'pdc'])
+            ->where('approval_status', 'approved')
             ->orderBy('due_date')
-            ->orderByDesc('voucher_date')
-            ->get();
+            ->orderByDesc('voucher_date');
+
+        if (auth()->user()->isAccounting()) {
+            $openQuery->whereHas('approvalRequests', fn ($q) => $q
+                ->where('type', VoucherRequest::TYPE_CREATE)
+                ->where('requested_by', auth()->id()));
+        }
+
+        $open = $openQuery->get();
 
         // Group into aging buckets (PHP-side; amounts are encrypted).
         $buckets = collect(array_keys(self::AGING_LABELS))
@@ -215,36 +242,23 @@ class VoucherController extends Controller
     {
         $data = $this->validateVoucher($request);
         $this->validateAttachments($request);
+        $entryRows = $this->validateAndBalanceEntries($request);
 
-        // Validate accounting entries when provided.
-        $entryRows = collect($request->input('entries', []))->filter(fn ($r) => ! empty($r['amount']) && (float) $r['amount'] > 0)->values()->all();
+        $isAccounting = auth()->user()->isAccounting();
 
-        if (! empty($entryRows)) {
-            $request->validate([
-                'entries'                 => ['array'],
-                'entries.*.category_id'   => ['required', 'exists:project_categories,id'],
-                'entries.*.entry_type'    => ['required', 'in:debit,credit'],
-                'entries.*.amount'        => ['required', 'numeric', 'min:0.01'],
-                'entries.*.project_id'    => ['nullable', 'exists:projects,id'],
-                'entries.*.description'   => ['nullable', 'string', 'max:500'],
-            ]);
-
-            $totalDebit  = collect($entryRows)->where('entry_type', 'debit')->sum(fn ($r) => (float) $r['amount']);
-            $totalCredit = collect($entryRows)->where('entry_type', 'credit')->sum(fn ($r) => (float) $r['amount']);
-
-            if (abs($totalDebit - $totalCredit) > 0.005) {
-                return redirect()->back()
-                    ->withInput()
-                    ->withErrors(['entries' => 'Total Debit must equal Total Credit. Difference: ₱' . number_format(abs($totalDebit - $totalCredit), 2)]);
-            }
-        }
-
-        $paidOnCreate = ($data['payment_status'] ?? 'unpaid') === 'paid';
+        $paidOnCreate = ! $isAccounting && ($data['payment_status'] ?? 'unpaid') === 'paid';
         unset($data['payment_status']);
 
         $data['status'] = 'unpaid';
+        $data['approval_status'] = $isAccounting ? 'pending' : 'approved';
 
-        $voucher = DB::transaction(function () use ($request, $data, $entryRows) {
+        // Accounting Staff are locked to the office they were invited for —
+        // ignore whatever source the form submitted and use theirs instead.
+        if ($lockedSource = auth()->user()->lockedSource()) {
+            $data['source'] = $lockedSource;
+        }
+
+        $voucher = DB::transaction(function () use ($request, $data, $entryRows, $isAccounting) {
             $voucher = Voucher::create($data);
             $this->saveAttachmentsFromRequest($request, $voucher);
 
@@ -259,12 +273,21 @@ class VoucherController extends Controller
                 ]);
             }
 
+            if ($isAccounting) {
+                $voucher->approvalRequests()->create([
+                    'type'         => VoucherRequest::TYPE_CREATE,
+                    'requested_by' => auth()->id(),
+                    'reason'       => $request->input('reason'),
+                ]);
+            }
+
             return $voucher;
         });
 
         // "Paid" at creation means the cash already went out — record the
         // full payment now so status, ledger and project outflow stay
         // derived from real VoucherPayment rows (no manual status override).
+        // Accounting Staff can't pay out a voucher that isn't approved yet.
         if ($paidOnCreate) {
             VoucherService::recordPayment($voucher, [
                 'bank_account_id' => $voucher->source_bank_account_id,
@@ -272,6 +295,11 @@ class VoucherController extends Controller
                 'amount'          => $voucher->amount_payable,
                 'mode'            => $voucher->mode_of_payment,
             ]);
+        }
+
+        if ($isAccounting) {
+            return redirect()->route('vouchers.show', $voucher)
+                ->with('success', "Voucher {$voucher->voucher_no} submitted for CFO approval.");
         }
 
         return redirect()->route('vouchers.show', $voucher)
@@ -282,6 +310,19 @@ class VoucherController extends Controller
     {
         $data = $this->validateVoucher($request, $voucher);
         $this->validateAttachments($request);
+        $entryRows = $this->validateAndBalanceEntries($request);
+
+        if ($lockedSource = auth()->user()->lockedSource()) {
+            $data['source'] = $lockedSource;
+        }
+
+        // Accounting Staff can't change an already-approved voucher directly —
+        // their change goes to the CFO as an edit request instead. A voucher
+        // they themselves submitted that's still pending stays directly
+        // editable (nothing approved yet to protect).
+        if (auth()->user()->isAccounting() && $voucher->approval_status === 'approved') {
+            return $this->submitEditRequest($request, $voucher, $data, $entryRows);
+        }
 
         $markPaid = ($data['payment_status'] ?? 'unpaid') === 'paid';
         unset($data['payment_status']);
@@ -294,31 +335,6 @@ class VoucherController extends Controller
             return redirect()->back()
                 ->withInput()
                 ->withErrors(['payment_status' => 'A fully paid voucher cannot be set back to unpaid here — reverse the payment(s) from the voucher view first.']);
-        }
-
-        // Replace accounting entries when submitted from the edit page.
-        $entryRows = collect($request->input('entries', []))
-            ->filter(fn ($r) => ! empty($r['amount']) && (float) $r['amount'] > 0)
-            ->values()->all();
-
-        if (! empty($entryRows)) {
-            $request->validate([
-                'entries'               => ['array'],
-                'entries.*.category_id' => ['required', 'exists:project_categories,id'],
-                'entries.*.entry_type'  => ['required', 'in:debit,credit'],
-                'entries.*.amount'      => ['required', 'numeric', 'min:0.01'],
-                'entries.*.project_id'  => ['nullable', 'exists:projects,id'],
-                'entries.*.description' => ['nullable', 'string', 'max:500'],
-            ]);
-
-            $totalDebit  = collect($entryRows)->where('entry_type', 'debit')->sum(fn ($r) => (float) $r['amount']);
-            $totalCredit = collect($entryRows)->where('entry_type', 'credit')->sum(fn ($r) => (float) $r['amount']);
-
-            if (abs($totalDebit - $totalCredit) > 0.005) {
-                return redirect()->back()
-                    ->withInput()
-                    ->withErrors(['entries' => 'Total Debit must equal Total Credit. Difference: ₱' . number_format(abs($totalDebit - $totalCredit), 2)]);
-            }
         }
 
         $sourceBankAccountId = $data['source_bank_account_id'] ?? $voucher->source_bank_account_id;
@@ -371,8 +387,43 @@ class VoucherController extends Controller
             ->with('success', $message);
     }
 
-    public function destroy(Voucher $voucher): RedirectResponse
+    public function destroy(Request $request, Voucher $voucher): RedirectResponse
     {
+        if (auth()->user()->isAccounting() && $voucher->isPendingApproval()) {
+            return redirect()->back()->withErrors(['reason' => 'This voucher is still awaiting CFO approval and cannot be deleted yet.']);
+        }
+
+        if (auth()->user()->isAccounting() && $voucher->approval_status === 'approved') {
+            $request->validate(['reason' => ['required', 'string', 'max:1000']]);
+
+            if ($voucher->pendingRequest()) {
+                return redirect()->back()->withErrors(['reason' => 'A request is already pending review for this voucher.']);
+            }
+
+            $voucher->approvalRequests()->create([
+                'type'         => VoucherRequest::TYPE_DELETE,
+                'requested_by' => auth()->id(),
+                'reason'       => $request->input('reason'),
+            ]);
+
+            return redirect()->route('vouchers.show', $voucher)
+                ->with('success', "Delete request for voucher {$voucher->voucher_no} submitted for CFO approval.");
+        }
+
+        // A voucher can still have a pending request riding on it (e.g. an
+        // accounting-own voucher that's still "for approval", or one an
+        // admin/cfo deletes outright while a request is mid-review) —
+        // resolve it first so the approval queue never points at a
+        // soft-deleted voucher.
+        if ($pending = $voucher->pendingRequest()) {
+            $pending->update([
+                'status'       => VoucherRequest::STATUS_REJECTED,
+                'reviewed_by'  => auth()->id(),
+                'reviewed_at'  => now(),
+                'review_note'  => 'Voucher was deleted before this request could be reviewed.',
+            ]);
+        }
+
         $no = $voucher->voucher_no;
         VoucherService::destroyVoucher($voucher);
 
@@ -541,6 +592,68 @@ class VoucherController extends Controller
             'change_amount'          => ['nullable', 'numeric', 'min:0'],
             'payment_status'         => ['nullable', Rule::in(['paid', 'unpaid'])],
         ]);
+    }
+
+    /**
+     * Shared by store() and update(): parses + validates the accounting
+     * entries rows submitted from the voucher form, and checks debit/credit
+     * balance. Returns the cleaned rows (possibly empty).
+     */
+    private function validateAndBalanceEntries(Request $request): array
+    {
+        $entryRows = collect($request->input('entries', []))
+            ->filter(fn ($r) => ! empty($r['amount']) && (float) $r['amount'] > 0)
+            ->values()->all();
+
+        if (empty($entryRows)) {
+            return $entryRows;
+        }
+
+        $request->validate([
+            'entries'               => ['array'],
+            'entries.*.category_id' => ['required', 'exists:project_categories,id'],
+            'entries.*.entry_type'  => ['required', 'in:debit,credit'],
+            'entries.*.amount'      => ['required', 'numeric', 'min:0.01'],
+            'entries.*.project_id'  => ['nullable', 'exists:projects,id'],
+            'entries.*.description' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $totalDebit  = collect($entryRows)->where('entry_type', 'debit')->sum(fn ($r) => (float) $r['amount']);
+        $totalCredit = collect($entryRows)->where('entry_type', 'credit')->sum(fn ($r) => (float) $r['amount']);
+
+        if (abs($totalDebit - $totalCredit) > 0.005) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'entries' => 'Total Debit must equal Total Credit. Difference: ₱' . number_format(abs($totalDebit - $totalCredit), 2),
+            ]);
+        }
+
+        return $entryRows;
+    }
+
+    /**
+     * Accounting Staff editing an already-approved voucher — record the
+     * proposed changes as a pending request instead of touching the live
+     * voucher. CFO/admin apply or discard it via VoucherRequestService.
+     */
+    private function submitEditRequest(Request $request, Voucher $voucher, array $data, array $entryRows): RedirectResponse
+    {
+        if ($voucher->pendingRequest()) {
+            return redirect()->back()->withInput()->withErrors(['reason' => 'A request is already pending review for this voucher.']);
+        }
+
+        $request->validate(['reason' => ['required', 'string', 'max:1000']]);
+        unset($data['payment_status']);
+
+        $voucher->approvalRequests()->create([
+            'type'            => VoucherRequest::TYPE_EDIT,
+            'requested_by'    => auth()->id(),
+            'reason'          => $request->input('reason'),
+            'payload'         => $data,
+            'entries_payload' => $entryRows ?: null,
+        ]);
+
+        return redirect()->route('vouchers.show', $voucher)
+            ->with('success', "Edit request for voucher {$voucher->voucher_no} submitted for CFO approval.");
     }
 
     private function validateAttachments(Request $request): void

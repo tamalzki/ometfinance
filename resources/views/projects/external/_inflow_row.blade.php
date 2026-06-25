@@ -71,7 +71,17 @@
             <span class="block text-[11px] text-slate-400">from {{ $c->transfer->fromAccount->name }}@if($c->transfer->fromProject) · {{ $c->transfer->fromProject->name }}@endif</span>
         @endif
     </td>
-    <td class="px-4 py-2.5 text-right text-[13px] font-semibold tabular-nums text-emerald-700">₱{{ number_format($c->amount, 2) }}</td>
+    <td class="px-4 py-2.5 text-right text-[13px] font-semibold tabular-nums text-emerald-700">
+        ₱{{ number_format($c->amount, 2) }}
+        @if (! $isBorrowed && $c->totalDeductions() > 0)
+            <span class="block text-[10px] font-normal text-amber-700" title="Deductions: ₱{{ number_format($c->totalDeductions(), 2) }}">
+                −₱{{ number_format($c->totalDeductions(), 2) }} ded.
+            </span>
+            <span class="block text-[10px] font-normal text-slate-400">
+                net ₱{{ number_format($c->netAmount(), 2) }}
+            </span>
+        @endif
+    </td>
     @if ($showActions)
     <td class="px-4 py-2.5 text-[12px] text-slate-500">{{ $c->notes ?? '' }}</td>
     <td class="px-3 py-2.5 text-right">

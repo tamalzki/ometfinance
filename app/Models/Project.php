@@ -46,9 +46,20 @@ class Project extends Model
         return (float) $this->expenses->sum(fn ($e) => (float) $e->amount);
     }
 
+    /**
+     * Cash actually available — client collections net of deductions, plus
+     * borrowed/support funds (which carry no deductions), minus expenses.
+     * Uses net rather than gross so this reflects real liquidity, not the
+     * billed/contract figure.
+     */
     public function netCashPosition(): float
     {
-        return $this->totalCollected() - $this->totalExpenses();
+        return $this->totalCollectedNet() - $this->totalExpenses();
+    }
+
+    public function totalCollectedNet(): float
+    {
+        return $this->totalClientCollectedNet() + $this->totalBorrowed();
     }
 
     /**
@@ -67,6 +78,44 @@ class Project extends Model
         return (float) $this->collections
             ->filter(fn ($c) => $c->isFromTransfer())
             ->sum(fn ($c) => (float) $c->amount);
+    }
+
+    /**
+     * Real cash from client collections after VAT, withholding tax,
+     * retention, recoupment, and other deductions. Borrowed/support funds
+     * carry no such deductions and are excluded.
+     */
+    public function totalClientCollectedNet(): float
+    {
+        return (float) $this->collections
+            ->filter(fn ($c) => ! $c->isFromTransfer())
+            ->sum(fn ($c) => $c->netAmount());
+    }
+
+    public function totalDeductions(): float
+    {
+        return (float) $this->collections
+            ->filter(fn ($c) => ! $c->isFromTransfer())
+            ->sum(fn ($c) => $c->totalDeductions());
+    }
+
+    /**
+     * Deductions broken down by type, summed across all client collections —
+     * for the per-type chips shown on the project overview.
+     *
+     * @return array{vat: float, wht: float, retention: float, recoupment: float, other: float}
+     */
+    public function deductionTotalsByType(): array
+    {
+        $clientCollections = $this->collections->filter(fn ($c) => ! $c->isFromTransfer());
+
+        return [
+            'vat'        => (float) $clientCollections->sum(fn ($c) => (float) $c->vat_amount),
+            'wht'        => (float) $clientCollections->sum(fn ($c) => (float) $c->wht_amount),
+            'retention'  => (float) $clientCollections->sum(fn ($c) => (float) $c->retention_amount),
+            'recoupment' => (float) $clientCollections->sum(fn ($c) => (float) $c->recoupment_amount),
+            'other'      => (float) $clientCollections->sum(fn ($c) => (float) $c->other_deductions_amount),
+        ];
     }
 
     /* ── relationships ── */

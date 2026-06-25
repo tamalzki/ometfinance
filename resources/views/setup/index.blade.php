@@ -1,4 +1,14 @@
 <x-guest-layout>
+@php
+    $roleLabel = match ($invite->role) {
+        'cfo'        => 'CFO',
+        'accounting' => 'Accounting',
+        default      => 'administrator',
+    };
+    $officeLabel = ($invite->role === 'accounting' && ($invite->source ?? null))
+        ? ($invite->source === 'bgc' ? 'BGC' : 'Main')
+        : null;
+@endphp
     <div class="min-h-screen bg-[#0B1726] lg:grid lg:grid-cols-[1.1fr_1fr]">
 
         {{-- ── LEFT PANE · Product context ───────────────────────────────────── --}}
@@ -29,11 +39,14 @@
                     One-time account setup
                 </span>
                 <h2 class="mt-4 text-[34px] font-semibold leading-[1.1] tracking-tight text-white xl:text-[40px]">
-                    Finish setting up your <span class="text-[#60A5FA]">{{ $invite->role === 'cfo' ? 'CFO' : 'administrator' }}</span> account.
+                    Finish setting up your <span class="text-[#60A5FA]">{{ $roleLabel }}</span> account.
                 </h2>
                 <p class="mt-4 text-[14px] leading-relaxed text-slate-400">
                     This invite was issued from the OMET CLI and is tied to a single email.
                     Once used, the link is permanently invalidated.
+                    @if ($officeLabel)
+                        Your vouchers will be locked to the <span class="font-medium text-slate-300">{{ $officeLabel }}</span> office.
+                    @endif
                 </p>
 
                 <ul class="mt-8 space-y-3 text-[13px] text-slate-300">
@@ -111,7 +124,7 @@
                 >
 
                     <div class="mb-5">
-                        <h1 class="text-[18px] font-semibold tracking-tight text-slate-900">Set up your {{ $invite->role === 'cfo' ? 'CFO' : 'admin' }} account</h1>
+                        <h1 class="text-[18px] font-semibold tracking-tight text-slate-900">Set up your {{ $roleLabel }} account</h1>
                         <p class="mt-1 text-[13px] text-slate-500">
                             Inviting <span class="font-medium text-slate-700">{{ $invite->email }}</span>
                         </p>
@@ -220,7 +233,7 @@
                             :disabled="expired"
                             class="mt-2 flex h-[42px] w-full items-center justify-center rounded-lg bg-[#0B1726] text-[13.5px] font-semibold text-white shadow-sm transition hover:bg-[#152439] focus:outline-none focus:ring-4 focus:ring-[#3B82F6]/20 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            <span x-show="!expired">Create {{ $invite->role === 'cfo' ? 'CFO' : 'admin' }} account</span>
+                            <span x-show="!expired">Create {{ $roleLabel }} account</span>
                             <span x-show="expired" x-cloak>Invite expired</span>
                         </button>
                     </form>

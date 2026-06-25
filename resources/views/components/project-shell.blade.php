@@ -30,6 +30,7 @@
     $netPosition     = $project->netCashPosition();
     $clientCollected = $project->totalClientCollected();
     $borrowedTotal   = $project->totalBorrowed();
+    $totalDeductions = $project->totalDeductions();
 
     $isExternal     = $project->isExternal();
 
@@ -87,7 +88,7 @@
     showNewCollection: {{ old('_form') ? 'true' : 'false' }},
     inflowMode: '{{ $initialInflowMode }}',
     showEdit: {{ session('openEdit') ? 'true' : 'false' }}
-}" class="space-y-4">
+}" class="space-y-3">
 
     {{-- Flash --}}
     @if (session('success'))
@@ -99,16 +100,14 @@
     </div>
     @endif
 
-    {{-- Back to listing --}}
-    <a href="{{ route($isExternal ? 'projects.external' : 'projects.in_house') }}"
-       class="-mb-1 inline-flex w-fit shrink-0 items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-omet-navy">
-        <i data-lucide="arrow-left" class="h-3.5 w-3.5"></i>
-        {{ $isExternal ? 'External Projects' : 'In-house Projects' }}
-    </a>
-
-    {{-- Sticky header + action bar --}}
+    {{-- Sticky header + action bar (back link folded in to save a row) --}}
     <div class="sticky top-0 z-30 -mx-4 sm:-mx-6 lg:-mx-7 border-b border-gray-200 bg-white/95 px-4 py-3 shadow-sm backdrop-blur sm:px-6 lg:px-7">
-        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <a href="{{ route($isExternal ? 'projects.external' : 'projects.in_house') }}"
+           class="mb-2 inline-flex w-fit shrink-0 items-center gap-1 text-[11px] font-medium text-slate-400 transition hover:text-omet-navy">
+            <i data-lucide="arrow-left" class="h-3 w-3"></i>
+            {{ $isExternal ? 'External Projects' : 'In-house Projects' }}
+        </a>
+        <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5">
             <div class="min-w-0 flex-1">
                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <h1 class="truncate text-lg font-bold text-omet-navy">{{ $project->name }}</h1>
@@ -174,6 +173,11 @@
         <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
             <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Net cash</p>
             <p class="mt-0.5 text-sm font-bold tabular-nums {{ $netPosition >= 0 ? 'text-omet-navy' : 'text-red-600' }}">₱{{ number_format($netPosition, 2) }}</p>
+            @if ($totalDeductions > 0)
+            <p class="mt-0.5 text-[10px] tabular-nums text-slate-400" title="Collections counted net of VAT/WHT/retention/recoupment/other deductions">
+                net of ₱{{ number_format($totalDeductions, 2) }} deducted
+            </p>
+            @endif
         </div>
         <div class="rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-sm">
             <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ $percentLabel }}</p>
@@ -219,7 +223,7 @@
          class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
          @keydown.escape.window="showNewCollection = false">
         <div @click.outside="showNewCollection = false"
-             class="w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-xl" style="max-height:90vh">
+             class="w-full max-w-xl overflow-y-auto rounded-2xl bg-white shadow-xl" style="max-height:90vh">
             <div class="flex items-center justify-between border-b border-gray-100 px-6 py-4">
                 <div>
                     <h3 class="text-base font-semibold text-omet-navy">{{ $isExternal ? 'Record inflow' : 'Record funding' }}</h3>
@@ -266,7 +270,32 @@
             </div>
 
             {{-- Pane 1 · Client collection (external only) --}}
-            <form x-show="inflowMode === 'collection'" method="POST" action="{{ route('projects.collections.store', $project) }}" class="space-y-4 px-6 py-5">
+            <form x-show="inflowMode === 'collection'" method="POST" action="{{ route('projects.collections.store', $project) }}" class="space-y-4 px-6 py-5"
+                x-data="{
+                    amount: {{ old('amount', 0) }},
+                    clientType: '{{ old('client_type') }}',
+                    transactionType: '{{ old('transaction_type') }}',
+                    vatRate: {{ old('vat_rate', 0) }},
+                    whtRate: {{ old('wht_rate', 0) }},
+                    retentionRate: {{ old('retention_rate', 0) }},
+                    recoupmentRate: {{ old('recoupment_rate', 0) }},
+                    otherDeductions: {{ old('other_deductions_amount', 0) }},
+                    applyClientType() {
+                        this.vatRate = this.clientType === 'government' ? 5 : 0;
+                    },
+                    applyTransactionType() {
+                        if (this.transactionType === 'goods') { this.whtRate = 1; this.retentionRate = 1; }
+                        else if (this.transactionType === 'services') { this.whtRate = 2; this.retentionRate = 10; }
+                    },
+                    get totalDeductions() {
+                        const a = parseFloat(this.amount) || 0;
+                        return a * ((parseFloat(this.vatRate) || 0) + (parseFloat(this.whtRate) || 0) + (parseFloat(this.retentionRate) || 0) + (parseFloat(this.recoupmentRate) || 0)) / 100
+                            + (parseFloat(this.otherDeductions) || 0);
+                    },
+                    get netAmount() {
+                        return (parseFloat(this.amount) || 0) - this.totalDeductions;
+                    },
+                }">
                 @csrf
                 <input type="hidden" name="_form" value="collection">
                 <div class="grid grid-cols-2 gap-4">
@@ -276,7 +305,7 @@
                     </div>
                     <div>
                         <x-label for="c_amount" :value="__('Amount (PHP) *')" />
-                        <x-input id="c_amount" type="number" name="amount" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('amount')" min="0.01" step="0.01" required />
+                        <x-input id="c_amount" type="number" name="amount" x-model="amount" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('amount')" min="0.01" step="0.01" required />
                     </div>
                     <div>
                         <x-label for="c_ref" :value="__('Reference / OR no.')" />
@@ -300,6 +329,63 @@
                             class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">{{ old('notes') }}</textarea>
                     </div>
                 </div>
+
+                {{-- Deductions --}}
+                <div class="rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+                    <p class="mb-3 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                        <i data-lucide="receipt-text" class="h-3.5 w-3.5"></i> Deductions
+                    </p>
+
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-4">
+                        <div>
+                            <x-label for="c_client_type" :value="__('Client type')" />
+                            <select id="c_client_type" name="client_type" x-model="clientType" @change="applyClientType()"
+                                class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
+                                <option value="">— not set —</option>
+                                <option value="private">Private</option>
+                                <option value="government">Government</option>
+                            </select>
+                            <p class="mt-1 text-[11px] text-slate-500">
+                                Advance output VAT: <span class="font-semibold text-slate-700" x-text="vatRate + '%'"></span>
+                                <input type="hidden" name="vat_rate" x-model="vatRate">
+                            </p>
+                        </div>
+                        <div>
+                            <x-label for="c_txn_type" :value="__('Goods or services')" />
+                            <select id="c_txn_type" name="transaction_type" x-model="transactionType" @change="applyTransactionType()"
+                                class="mt-1 block w-full rounded-lg border-gray-300 text-sm focus:border-omet-blue focus:ring-omet-blue">
+                                <option value="">— not set —</option>
+                                <option value="goods">Goods</option>
+                                <option value="services">Services</option>
+                            </select>
+                            <p class="mt-1 text-[11px] text-slate-500">
+                                WHT <span class="font-semibold text-slate-700" x-text="whtRate + '%'"></span> · Retention <span class="font-semibold text-slate-700" x-text="retentionRate + '%'"></span>
+                                <input type="hidden" name="wht_rate" x-model="whtRate">
+                                <input type="hidden" name="retention_rate" x-model="retentionRate">
+                            </p>
+                        </div>
+                        <div>
+                            <x-label for="c_recoupment_rate" :value="__('Recoupment (%)')" />
+                            <x-input id="c_recoupment_rate" type="number" name="recoupment_rate" x-model="recoupmentRate" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" min="0" max="100" step="0.01" placeholder="varies per agency" />
+                            <p class="mt-1 text-[11px] text-slate-500">No fixed rate — enter what applies for this agency.</p>
+                        </div>
+                        <div>
+                            <x-label for="c_other_amt" :value="__('Other deductions (PHP)')" />
+                            <x-input id="c_other_amt" type="number" name="other_deductions_amount" x-model="otherDeductions" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" min="0" step="0.01" />
+                            <p class="mt-1 text-[11px] text-slate-500">No fixed amount — e.g. bank or processing fees.</p>
+                        </div>
+                        <div class="col-span-2">
+                            <x-label for="c_other_notes" :value="__('Other deduction notes')" />
+                            <x-input id="c_other_notes" type="text" name="other_deductions_notes" class="mt-1 block w-full rounded-lg border-gray-300 text-sm" :value="old('other_deductions_notes')" placeholder="e.g. processing fee" />
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex items-center justify-between rounded-md bg-white px-3.5 py-2.5 ring-1 ring-amber-200">
+                        <span class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Real collection (after deductions)</span>
+                        <span class="text-[14px] font-bold tabular-nums text-emerald-700" x-text="'₱' + netAmount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })"></span>
+                    </div>
+                </div>
+
                 <div class="flex justify-end gap-2 pt-1">
                     <button type="button" @click="showNewCollection = false"
                         class="rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">Cancel</button>

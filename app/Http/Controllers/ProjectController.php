@@ -192,7 +192,22 @@ class ProjectController extends Controller
         if (! $project->isExternal()) {
             return redirect()->route('projects.show.overview', $project);
         }
-        return view('projects.external.allocation', $this->loadProjectData($project));
+
+        $data = $this->loadProjectData($project);
+
+        // Simple chronological log of percent changes — one row per line per
+        // edit, reusing the Auditable trail already written on update().
+        $data['allocationHistory'] = \App\Models\AuditLog::where('auditable_type', ProjectAllocationLine::class)
+            ->whereIn('auditable_id', $project->allocationLines->pluck('id'))
+            ->where('event', 'updated')
+            ->whereNotNull('new_values->percent')
+            ->with('user')
+            ->latest('created_at')
+            ->latest('id')
+            ->limit(50)
+            ->get();
+
+        return view('projects.external.allocation', $data);
     }
 
     public function showInflow(Project $project): View
@@ -268,6 +283,20 @@ class ProjectController extends Controller
             ->with('success', 'Project updated.');
     }
 
+    /* ── Adjust allocation (budget distribution can shift with project status) ── */
+
+    public function updateAllocation(\App\Http\Requests\UpdateProjectAllocationRequest $request, Project $project): RedirectResponse
+    {
+        $lines = $project->allocationLines()->get()->keyBy('id');
+
+        foreach ($request->validated()['percents'] as $lineId => $percent) {
+            $lines->get((int) $lineId)?->update(['percent' => $percent / 100]);
+        }
+
+        return redirect()->route('projects.show.allocation', $project)
+            ->with('success', 'Allocation adjusted.');
+    }
+
     /* ── Record a collection (inflow) ────────────────────────────────────── */
 
     public function storeCollection(\App\Http\Requests\StoreProjectCollectionRequest $request, Project $project): RedirectResponse
@@ -281,9 +310,28 @@ class ProjectController extends Controller
             ]);
         }
 
-        $project->collections()->create($request->validated());
+        $project->collections()->create($this->withComputedDeductions($request->validated()));
 
         return back()->with('success', 'Collection recorded.');
+    }
+
+    /**
+     * Deduction rates come from the form; the deducted amounts are always
+     * derived here from `amount * rate` so a tampered or stale client-side
+     * computation can never end up stored as the "real" deduction.
+     */
+    private function withComputedDeductions(array $data): array
+    {
+        $amount = (float) $data['amount'];
+
+        foreach (['vat', 'wht', 'retention', 'recoupment'] as $deduction) {
+            $rate = (float) ($data["{$deduction}_rate"] ?? 0);
+            $data["{$deduction}_amount"] = round($amount * $rate / 100, 2);
+        }
+
+        $data['other_deductions_amount'] = round((float) ($data['other_deductions_amount'] ?? 0), 2);
+
+        return $data;
     }
 
     /* ── Record funding (borrow / support from another account) ─────────── */

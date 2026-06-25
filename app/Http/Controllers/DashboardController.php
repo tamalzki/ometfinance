@@ -9,6 +9,7 @@ use App\Models\LedgerEntry;
 use App\Models\Project;
 use App\Models\Transfer;
 use App\Models\Voucher;
+use App\Models\VoucherRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\View\View;
 
@@ -16,6 +17,10 @@ class DashboardController extends Controller
 {
     public function index(): View
     {
+        if (auth()->user()->isAccounting()) {
+            return $this->accountingDashboard();
+        }
+
         $now           = Carbon::now();
         $monthStart    = $now->copy()->startOfMonth();
         $monthEnd      = $now->copy()->endOfMonth();
@@ -251,6 +256,49 @@ class DashboardController extends Controller
             'monthlyFlow'      => $monthlyFlow,
             'insights'         => $insights,
             'recentAudit'      => $recentAudit,
+        ]);
+    }
+
+    /**
+     * Accounting Staff get a personal view scoped to vouchers they
+     * themselves submitted — not the company-wide cash/project overview.
+     */
+    private function accountingDashboard(): View
+    {
+        $userId = auth()->id();
+
+        $myRequests = VoucherRequest::with(['voucher' => fn ($q) => $q->withTrashed(), 'reviewedBy'])
+            ->where('requested_by', $userId)
+            ->latest()
+            ->get();
+
+        $myVoucherIds = $myRequests->where('type', VoucherRequest::TYPE_CREATE)->pluck('voucher_id');
+        $myVouchers   = Voucher::with('payments')->whereIn('id', $myVoucherIds)->get();
+
+        $openVouchers = $myVouchers->filter->isOpen();
+
+        $stats = [
+            'submitted'   => $myVouchers->count(),
+            'pending'     => $myRequests->where('status', VoucherRequest::STATUS_PENDING)->count(),
+            'approved'    => $myVouchers->where('approval_status', 'approved')->count(),
+            'rejected'    => $myVouchers->where('approval_status', 'rejected')->count(),
+            'outstanding' => (float) $openVouchers->sum(fn ($v) => $v->balanceDue()),
+            'overdue'     => $openVouchers->filter->isOverdue()->count(),
+        ];
+
+        // Anything the CFO rejected (creation, edit, or delete) where nothing
+        // newer has been submitted since — the cases that genuinely still
+        // need the staff member's attention.
+        $needsAttention = $myRequests
+            ->where('status', VoucherRequest::STATUS_REJECTED)
+            ->filter(fn ($r) => $r->voucher && $r->voucher->latestRequest()?->id === $r->id)
+            ->values();
+
+        return view('dashboard.index', [
+            'isAccounting'    => true,
+            'acctStats'       => $stats,
+            'recentRequests'  => $myRequests->take(8),
+            'needsAttention'  => $needsAttention,
         ]);
     }
 }

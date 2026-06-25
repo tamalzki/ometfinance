@@ -31,6 +31,7 @@
             'links' => [
                 ['name' => 'Daily Transactions', 'route' => 'vouchers.index', 'icon' => 'receipt', 'pattern' => 'vouchers.index'],
                 ['name' => 'Payables',  'route' => 'vouchers.payables', 'icon' => 'alarm-clock', 'pattern' => 'vouchers.payables'],
+                ['name' => 'Voucher Approvals', 'route' => 'voucher-requests.index', 'icon' => 'git-pull-request', 'pattern' => 'voucher-requests.*', 'cfoAdminOnly' => true],
             ],
         ],
         [
@@ -73,6 +74,29 @@
             array_filter($sections, fn ($s, $i) => $i !== 2, ARRAY_FILTER_USE_BOTH)
         );
     }
+
+    // Accounting Staff: only Dashboard (their own scoped view), Daily
+    // Transactions, and Payables — no Categories, Projects, Cash Movement,
+    // Reports, or the approval queue (that's for the reviewer, not the requester).
+    if ($user->isAccounting()) {
+        $sections[0]['links'] = array_values(
+            array_filter($sections[0]['links'], fn ($l) => $l['route'] === 'dashboard')
+        );
+        $sections = array_values(
+            array_filter($sections, fn ($s, $i) => ! in_array($i, [1, 2, 4], true), ARRAY_FILTER_USE_BOTH)
+        );
+    }
+
+    if (! $user->isAdmin() && ! $user->isCfo()) {
+        foreach ($sections as &$section) {
+            $section['links'] = array_values(array_filter($section['links'], fn ($l) => empty($l['cfoAdminOnly'])));
+        }
+        unset($section);
+    }
+
+    $pendingApprovalCount = ($user->isAdmin() || $user->isCfo())
+        ? \App\Models\VoucherRequest::where('status', 'pending')->count()
+        : 0;
 @endphp
 
 <aside
@@ -188,6 +212,9 @@
                                     'text-slate-400 group-hover:text-slate-200' => ! $active,
                                 ])></i>
                             <span class="truncate">{{ $link['name'] }}</span>
+                            @if (! empty($link['cfoAdminOnly']) && $pendingApprovalCount > 0)
+                                <span class="ml-auto flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">{{ $pendingApprovalCount }}</span>
+                            @endif
                         </a>
                     @endforeach
                 </div>
@@ -204,7 +231,7 @@
             <div class="min-w-0 flex-1 leading-tight">
                 <p class="truncate text-[12.5px] font-semibold text-white">{{ $user->name }}</p>
                 <p class="truncate text-[11px] text-slate-400">
-                    {{ $user->isCfo() ? 'CFO' : 'Admin' }} · {{ $user->email }}
+                    {{ $user->isCfo() ? 'CFO' : ($user->isAccounting() ? 'Accounting' : 'Admin') }} · {{ $user->email }}
                 </p>
             </div>
             <form method="POST" action="{{ route('logout') }}" class="shrink-0">

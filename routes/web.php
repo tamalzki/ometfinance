@@ -7,6 +7,7 @@ use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\VoucherController;
+use App\Http\Controllers\VoucherRequestController;
 use Illuminate\Support\Facades\Route;
 
 Route::redirect('/', '/dashboard');
@@ -68,6 +69,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/{project}/export-workbook',                    [ProjectController::class, 'exportWorkbook'])->name('exportWorkbook');
         Route::get('/{project}/export/{section}',                   [ProjectController::class, 'export'])->name('export');
         Route::put('/{project}',                                    [ProjectController::class, 'update'])->name('update');
+        Route::put('/{project}/allocation',                         [ProjectController::class, 'updateAllocation'])->name('allocation.update');
         Route::delete('/{project}',                                 [ProjectController::class, 'destroy'])->name('destroy');
         Route::post('/{project}/collections',                       [ProjectController::class, 'storeCollection'])->name('collections.store');
         Route::post('/{project}/funding',                           [ProjectController::class, 'storeFunding'])->name('funding.store');
@@ -93,6 +95,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/{voucher}/attachments',                  [VoucherController::class, 'storeAttachment'])->name('attachments.store');
         Route::get('/attachments/{attachment}/download',       [VoucherController::class, 'downloadAttachment'])->name('attachments.download');
         Route::delete('/attachments/{attachment}',             [VoucherController::class, 'destroyAttachment'])->name('attachments.destroy');
+    });
+    // Voucher approval queue — Accounting Staff submissions reviewed by CFO/admin.
+    Route::prefix('voucher-requests')->name('voucher-requests.')->middleware('role:admin,cfo')->group(function () {
+        Route::get('/',                          [VoucherRequestController::class, 'index'])->name('index');
+        Route::get('/{voucherRequest}',          [VoucherRequestController::class, 'show'])->name('show');
+        Route::post('/{voucherRequest}/approve', [VoucherRequestController::class, 'approve'])->name('approve');
+        Route::post('/{voucherRequest}/reject',  [VoucherRequestController::class, 'reject'])->name('reject');
     });
 
     // Transfers / Intercompany — admin only

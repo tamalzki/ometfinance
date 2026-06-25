@@ -173,6 +173,7 @@ document.addEventListener('alpine:init', () => {
                 this.$nextTick(() => document.getElementById('entry-error-banner')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
                 return;
             }
+            form.dispatchEvent(new Event('form:submitting'));
             form.submit();
         },
         attachmentError: '',
@@ -190,6 +191,8 @@ document.addEventListener('alpine:init', () => {
     }));
 });
 </script>
+
+<x-unsaved-changes-guard selector="#voucherForm" />
 
 <div x-data="createVoucherPage" class="flex min-h-0 min-w-0 flex-1 flex-col gap-5 overflow-y-auto pb-10">
 
@@ -216,7 +219,7 @@ document.addEventListener('alpine:init', () => {
         <p class="mt-0.5 text-xs text-slate-500">Records a payable. Money only leaves when you record a payment.</p>
     </div>
 
-    <form method="POST" action="{{ route('vouchers.store') }}" enctype="multipart/form-data"
+    <form id="voucherForm" method="POST" action="{{ route('vouchers.store') }}" enctype="multipart/form-data"
           @submit.prevent="validateAndSubmit($el)">
         @csrf
         <input type="hidden" name="amount_payable" :value="amountPayable > 0 ? amountPayable.toFixed(2) : ''">
@@ -265,6 +268,14 @@ document.addEventListener('alpine:init', () => {
 
                     <div class="mt-4">
                         <label class="mb-1.5 block text-[11px] font-medium text-gray-600">Voucher Source</label>
+                        @if ($lockedSource ?? null)
+                            <input type="hidden" name="source" value="{{ $lockedSource }}">
+                            <div class="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-[12.5px] font-medium text-slate-500">
+                                <i data-lucide="lock" class="h-3.5 w-3.5"></i>
+                                {{ $sources[$lockedSource] ?? $lockedSource }}
+                                <span class="text-[11px] font-normal text-slate-400">— locked to your office</span>
+                            </div>
+                        @else
                         <div class="flex flex-wrap gap-2.5">
                             @foreach ($sources as $key => $label)
                                 <label class="flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2.5 text-[12.5px] font-medium transition"
@@ -279,6 +290,7 @@ document.addEventListener('alpine:init', () => {
                                 </label>
                             @endforeach
                         </div>
+                        @endif
                     </div>
                 </div>
 
@@ -430,14 +442,20 @@ document.addEventListener('alpine:init', () => {
                         {{-- Payment status --}}
                         <div>
                             <label class="mb-1 block text-[11px] font-medium text-gray-600">Payment Status</label>
-                            <select name="payment_status" x-model="f.payment_status"
-                                    class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
+                            <select name="payment_status" x-model="f.payment_status" @if (auth()->user()->isAccounting()) disabled @endif
+                                    class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-[13px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10 disabled:bg-slate-50 disabled:text-slate-400">
                                 <option value="unpaid">Unpaid</option>
+                                @if (! auth()->user()->isAccounting())
                                 <option value="paid">Paid</option>
+                                @endif
                             </select>
+                            @if (auth()->user()->isAccounting())
+                                <p class="mt-1 text-[10.5px] text-slate-400">Vouchers you submit can't be marked paid until the CFO approves them.</p>
+                            @else
                             <template x-if="f.payment_status === 'paid' && !f.source_bank_account_id">
                                 <p class="mt-1 text-[10.5px] font-medium text-amber-700">Set a source bank account — required to post the payment.</p>
                             </template>
+                            @endif
                         </div>
                     </div>
 
@@ -775,6 +793,15 @@ document.addEventListener('alpine:init', () => {
                 </p>
             </template>
 
+            @if (auth()->user()->isAccounting())
+            <div class="rounded-lg border border-amber-200 bg-amber-50/40 p-4">
+                <label class="text-[11px] font-semibold uppercase tracking-wide text-amber-700">Reason / notes for the CFO (optional)</label>
+                <textarea name="reason" rows="2"
+                          class="mt-2 block w-full rounded-lg border-amber-200 text-[13px] focus:border-amber-400 focus:ring-amber-400"
+                          placeholder="Any context the CFO should know before approving.">{{ old('reason') }}</textarea>
+            </div>
+            @endif
+
             <div class="flex items-center justify-between gap-3">
                 <p class="text-[11px] text-slate-400">
                     Fields marked <span class="font-semibold text-red-400">*</span> are required.
@@ -787,7 +814,7 @@ document.addEventListener('alpine:init', () => {
                     <button type="submit"
                             :disabled="!!attachmentError || !isBalanced"
                             class="inline-flex items-center gap-2 rounded-lg bg-omet-blue px-6 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue disabled:cursor-not-allowed disabled:opacity-50">
-                        <i data-lucide="check" class="h-4 w-4"></i> Create Voucher
+                        <i data-lucide="check" class="h-4 w-4"></i> {{ auth()->user()->isAccounting() ? 'Submit for Approval' : 'Create Voucher' }}
                     </button>
                 </div>
             </div>

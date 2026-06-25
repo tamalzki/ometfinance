@@ -44,6 +44,7 @@ class SetupController extends Controller
                 'name'     => $data['name'],
                 'email'    => $invite->email,
                 'role'     => $invite->role ?? 'admin',
+                'source'   => $invite->source ?? null,
                 'password' => Hash::make($data['password']),
             ]);
 

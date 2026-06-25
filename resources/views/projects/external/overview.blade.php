@@ -4,6 +4,16 @@
     $completionPct  = $contractValue > 0 ? min(100, round($totalCollected / $contractValue * 100, 1)) : 0;
     $barWidth       = $contractValue > 0 ? min(100, $completionPct) : 0;
 
+    $deductions  = $project->deductionTotalsByType();
+    $netCollected = $project->totalClientCollectedNet();
+    $deductionChips = [
+        ['label' => 'VAT',        'amount' => $deductions['vat']],
+        ['label' => 'WHT',        'amount' => $deductions['wht']],
+        ['label' => 'Retention',  'amount' => $deductions['retention']],
+        ['label' => 'Recoupment', 'amount' => $deductions['recoupment']],
+        ['label' => 'Other',      'amount' => $deductions['other']],
+    ];
+
     $today      = \Illuminate\Support\Carbon::today();
     $dueDate    = $project->due_date;
     $dueStatus  = null;
@@ -41,7 +51,7 @@
                                 <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold {{ $dueBadge }}">{{ $dueStatus }}</span>
                             @endif
                         </div>
-                        <p class="mt-1 text-sm text-slate-600">
+                        <p class="mt-1 truncate text-sm text-slate-600">
                             @if ($contractValue > 0)
                                 <span class="font-bold tabular-nums text-emerald-700">₱{{ number_format($totalCollected, 2) }}</span>
                                 <span class="text-slate-400">collected of</span>
@@ -49,6 +59,11 @@
                                 <span class="text-slate-400">contract value</span>
                             @else
                                 <span class="text-slate-400">No contract value set — add one in Edit project to track progress.</span>
+                            @endif
+                            @if ($project->totalDeductions() > 0)
+                                <span class="text-slate-300">·</span>
+                                <span class="font-bold tabular-nums text-emerald-700">₱{{ number_format($netCollected, 2) }}</span>
+                                <span class="text-slate-400">usable after deductions</span>
                             @endif
                         </p>
                         <div class="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200">
@@ -65,6 +80,18 @@
                         @endif
                     </div>
                 </div>
+
+                @if ($project->totalDeductions() > 0)
+                <div class="mt-3 flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2.5">
+                    @foreach ($deductionChips as $chip)
+                        @if ($chip['amount'] > 0)
+                        <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-200">
+                            {{ $chip['label'] }} <span class="font-semibold tabular-nums">₱{{ number_format($chip['amount'], 2) }}</span>
+                        </span>
+                        @endif
+                    @endforeach
+                </div>
+                @endif
             </div>
 
             {{-- Recent activity panels --}}

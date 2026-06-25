@@ -21,6 +21,7 @@ class User extends Authenticatable
         'name',
         'email',
         'role',
+        'source',
         'password',
     ];
 
@@ -43,6 +44,13 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    public function isAdmin(): bool { return $this->role === 'admin'; }
-    public function isCfo(): bool   { return $this->role === 'cfo'; }
+    public function isAdmin(): bool      { return $this->role === 'admin'; }
+    public function isCfo(): bool        { return $this->role === 'cfo'; }
+    public function isAccounting(): bool { return $this->role === 'accounting'; }
+
+    /** Accounting Staff are locked to the office (Main/BGC) they were invited for; everyone else picks freely. */
+    public function lockedSource(): ?string
+    {
+        return $this->isAccounting() ? ($this->source ?: 'mindanao') : null;
+    }
 }

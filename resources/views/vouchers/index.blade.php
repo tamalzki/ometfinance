@@ -1,6 +1,7 @@
 <x-app-layout page-title="Daily Transactions">
 @php
     $peso = fn ($n) => '₱' . number_format((float) $n, 2);
+    $isAccountingUser = auth()->user()->isAccounting();
 
     $statusTone = [
         'draft'     => 'bg-slate-100 text-slate-600 ring-slate-200',
@@ -289,7 +290,8 @@ document.addEventListener('alpine:init', () => {
     </div>
 </div>
 
-{{-- ── Summary cards ────────────────────────────────────────────────────── --}}
+{{-- ── Summary cards — company-wide totals, not relevant to Accounting Staff's own-vouchers view ── --}}
+@unless ($isAccountingUser)
 <div class="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
     <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div class="flex items-center justify-between">
@@ -320,6 +322,7 @@ document.addEventListener('alpine:init', () => {
         <p class="mt-2 text-lg font-bold tabular-nums text-rose-600">{{ $summary['overdue'] }}</p>
     </div>
 </div>
+@endunless
 
 {{-- ── Toolbar ──────────────────────────────────────────────────────────── --}}
 <div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
@@ -401,6 +404,10 @@ document.addEventListener('alpine:init', () => {
                     $amountPaid = $v->amountPaid();
                     $balance = $v->balanceDue();
                     $overdue = $v->isOverdue();
+                    $notYetApproved = $isAccountingUser && $v->approval_status !== 'approved';
+                    $lockReason = $v->isPendingApproval()
+                        ? 'Waiting for CFO approval'
+                        : ($v->isApprovalRejected() ? 'Rejected by CFO — not actionable' : null);
                     $entryProjects = $v->entries->pluck('project')->filter()->unique('id')->values();
                     $rowProjects   = $entryProjects->isNotEmpty() ? $entryProjects : ($v->project ? collect([$v->project]) : collect());
                     $haystack = strtolower(implode(' ', array_filter([
@@ -432,9 +439,16 @@ document.addEventListener('alpine:init', () => {
                         ])->values(),
                     ];
                 @endphp
-                <tr class="group cursor-pointer transition-colors hover:bg-slate-50/70"
+                <tr @class([
+                        'group cursor-pointer transition-colors',
+                        'hover:bg-slate-50/70' => ! $notYetApproved,
+                        'bg-slate-50/80 hover:bg-slate-100/70 grayscale-[35%]' => $notYetApproved,
+                        'border-l-2 border-l-amber-300' => $notYetApproved && $v->isPendingApproval(),
+                        'border-l-2 border-l-rose-300' => $notYetApproved && $v->isApprovalRejected(),
+                    ])
                     x-show="q.trim() === '' || @js($haystack).includes(q.trim().toLowerCase())"
-                    @click="window.location = '{{ route('vouchers.show', $v->id) }}'">
+                    @click="window.location = '{{ route('vouchers.show', $v->id) }}'"
+                    @if ($notYetApproved) title="{{ $lockReason }}" @endif>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top whitespace-nowrap">
                         <span class="block text-[12.5px] font-semibold text-slate-700">{{ $v->voucher_no }}</span>
                         @if ($v->source)
@@ -456,10 +470,16 @@ document.addEventListener('alpine:init', () => {
                         @if ($rowProjects->isNotEmpty())
                             <div class="flex flex-wrap gap-1">
                                 @foreach ($rowProjects as $p)
-                                    <a href="{{ route('projects.show', $p) }}" @click.stop
-                                       class="inline-flex items-center rounded-md bg-omet-blue/5 px-1.5 py-0.5 text-[11px] font-medium text-omet-blue hover:underline">
-                                        {{ $p->name }}
-                                    </a>
+                                    @if ($isAccountingUser)
+                                        <span class="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
+                                            {{ $p->name }}
+                                        </span>
+                                    @else
+                                        <a href="{{ route('projects.show', $p) }}" @click.stop
+                                           class="inline-flex items-center rounded-md bg-omet-blue/5 px-1.5 py-0.5 text-[11px] font-medium text-omet-blue hover:underline">
+                                            {{ $p->name }}
+                                        </a>
+                                    @endif
                                 @endforeach
                             </div>
                         @else
@@ -469,42 +489,91 @@ document.addEventListener('alpine:init', () => {
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top text-right text-[12.5px] font-semibold tabular-nums text-omet-navy whitespace-nowrap">{{ $peso($v->amount_payable) }}</td>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top">
                         <span class="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 {{ $statusTone[$v->status] ?? 'bg-slate-100 text-slate-600 ring-slate-200' }}">{{ $v->statusLabel() }}</span>
+                        @if ($v->isPendingApproval())
+                            <span class="mt-1 block w-fit rounded-md bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-100">For Approval</span>
+                        @elseif ($v->isApprovalRejected())
+                            <span class="mt-1 block w-fit cursor-help rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 ring-1 ring-rose-100"
+                                  title="{{ $v->latestRequest()?->review_note ?: 'No reason was provided.' }}">Rejected — hover for reason</span>
+                        @elseif ($pendingReq = $v->pendingRequest())
+                            <span class="mt-1 block w-fit rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">{{ $pendingReq->typeLabel() }}</span>
+                        @endif
                     </td>
                     <td class="sticky right-0 z-10 border-b border-l border-slate-200 bg-white px-3 py-2.5 align-middle group-hover:bg-slate-50" @click.stop>
                         <div class="flex flex-row flex-nowrap items-center justify-end gap-1.5">
                             @if ($v->isOpen())
-                                <button type="button" @click="openPay({{ \Illuminate\Support\Js::from($payload) }})"
-                                        class="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100">
+                                <button type="button"
+                                        @if ($notYetApproved) disabled title="{{ $lockReason }}"
+                                        @else @click="openPay({{ \Illuminate\Support\Js::from($payload) }})" @endif
+                                        @class([
+                                            'inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition',
+                                            'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' => ! $notYetApproved,
+                                            'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400' => $notYetApproved,
+                                        ])>
                                     <i data-lucide="banknote" class="h-3 w-3 pointer-events-none"></i> Pay
                                 </button>
                             @endif
-                            <a href="{{ route('vouchers.edit', $v) }}"
-                               class="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
-                                <i data-lucide="pencil" class="h-3 w-3 pointer-events-none"></i> Edit
-                            </a>
+                            @if ($notYetApproved)
+                                <span title="{{ $lockReason }}"
+                                      class="inline-flex shrink-0 cursor-not-allowed items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-400">
+                                    <i data-lucide="pencil" class="h-3 w-3 pointer-events-none"></i> Edit
+                                </span>
+                            @else
+                                <a href="{{ route('vouchers.edit', $v) }}" @click.stop
+                                   class="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
+                                    <i data-lucide="pencil" class="h-3 w-3 pointer-events-none"></i> Edit
+                                </a>
+                            @endif
                             @if ($v->isOpen() && $v->payments->isEmpty())
                                 <form method="POST" action="{{ route('vouchers.cancel', $v->id) }}"
                                       onsubmit="return confirm('Cancel voucher {{ $v->voucher_no }}? It will be excluded from payables and can be reactivated later.');" class="inline-flex shrink-0">
                                     @csrf
-                                    <button type="submit" class="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600 shadow-sm transition hover:bg-rose-100">
+                                    <button type="submit" @if ($notYetApproved) disabled title="{{ $lockReason }}" @endif
+                                            @class([
+                                                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition',
+                                                'border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100' => ! $notYetApproved,
+                                                'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400' => $notYetApproved,
+                                            ])>
                                         <i data-lucide="ban" class="h-3 w-3 pointer-events-none"></i> Cancel
                                     </button>
                                 </form>
                             @elseif ($v->status === 'cancelled')
                                 <form method="POST" action="{{ route('vouchers.reactivate', $v->id) }}" class="inline-flex shrink-0">
                                     @csrf
-                                    <button type="submit" class="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 shadow-sm transition hover:bg-slate-50">
+                                    <button type="submit" @if ($notYetApproved) disabled title="{{ $lockReason }}" @endif
+                                            @class([
+                                                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition',
+                                                'border-slate-200 bg-white text-slate-600 hover:bg-slate-50' => ! $notYetApproved,
+                                                'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400' => $notYetApproved,
+                                            ])>
                                         <i data-lucide="rotate-ccw" class="h-3 w-3 pointer-events-none"></i> Reactivate
                                     </button>
                                 </form>
                             @endif
-                            <form method="POST" action="{{ route('vouchers.destroy', $v->id) }}"
-                                  onsubmit="return confirm('Delete voucher {{ $v->voucher_no }}? Any posted payments will be reversed.');" class="inline-flex shrink-0">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 shadow-sm transition hover:bg-red-100">
+                            @php
+                                $needsDeleteReason = $isAccountingUser && $v->approval_status === 'approved';
+                                $deleteLocked = $isAccountingUser && $v->isPendingApproval();
+                            @endphp
+                            @if ($deleteLocked)
+                                <span title="Still awaiting CFO approval — cannot be deleted yet."
+                                      class="inline-flex shrink-0 cursor-not-allowed items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-400">
                                     <i data-lucide="trash-2" class="h-3 w-3 pointer-events-none"></i>
-                                </button>
-                            </form>
+                                </span>
+                            @else
+                                <form method="POST" action="{{ route('vouchers.destroy', $v->id) }}" x-data="{ reason: '' }"
+                                      @if ($needsDeleteReason)
+                                      @submit="reason = prompt('Reason for requesting deletion of voucher {{ $v->voucher_no }} (required):') || ''; if (! reason.trim()) { $event.preventDefault(); }"
+                                      @else
+                                      onsubmit="return confirm('Delete voucher {{ $v->voucher_no }}? Any posted payments will be reversed.');"
+                                      @endif
+                                      class="inline-flex shrink-0">
+                                    @csrf @method('DELETE')
+                                    @if ($needsDeleteReason)<input type="hidden" name="reason" x-bind:value="reason">@endif
+                                    <button type="submit" class="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-600 shadow-sm transition hover:bg-red-100"
+                                            title="{{ $needsDeleteReason ? 'Request deletion' : 'Delete' }}">
+                                        <i data-lucide="trash-2" class="h-3 w-3 pointer-events-none"></i>
+                                    </button>
+                                </form>
+                            @endif
                         </div>
                     </td>
                 </tr>

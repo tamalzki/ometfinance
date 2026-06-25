@@ -140,6 +140,34 @@ class ProjectFundingTest extends TestCase
         $this->assertSame(0.0, $project->totalBorrowed());
     }
 
+    public function test_collection_deductions_are_computed_server_side()
+    {
+        $project = $this->makeProject('external');
+
+        $this->actingAs($this->admin)->post("/projects/{$project->id}/collections", [
+            'collected_on'            => now()->toDateString(),
+            'amount'                  => 100000,
+            'client_type'             => 'government',
+            'transaction_type'        => 'services',
+            'vat_rate'                => 5,
+            'wht_rate'                => 2,
+            'retention_rate'          => 10,
+            'recoupment_rate'         => 15,
+            'other_deductions_amount' => 500,
+        ])->assertSessionHasNoErrors();
+
+        $collection = $project->refresh()->collections->first();
+
+        $this->assertSame(5000.0, (float) $collection->vat_amount);
+        $this->assertSame(2000.0, (float) $collection->wht_amount);
+        $this->assertSame(10000.0, (float) $collection->retention_amount);
+        $this->assertSame(15000.0, (float) $collection->recoupment_amount);
+        $this->assertSame(500.0, (float) $collection->other_deductions_amount);
+        $this->assertSame(32500.0, $collection->totalDeductions());
+        $this->assertSame(67500.0, $collection->netAmount());
+        $this->assertSame(67500.0, $project->totalClientCollectedNet());
+    }
+
     public function test_cfo_cannot_record_funding()
     {
         $cfo = User::factory()->create(['role' => 'cfo']);

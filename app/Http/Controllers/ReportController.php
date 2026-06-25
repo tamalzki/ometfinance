@@ -328,7 +328,8 @@ class ReportController extends Controller
         $filters = $this->parseFilters($request);
 
         $query = Voucher::with(['project', 'sourceBankAccount.entity', 'payments'])
-            ->whereIn('status', ['unpaid', 'partial', 'pdc']);
+            ->whereIn('status', ['unpaid', 'partial', 'pdc'])
+            ->where('approval_status', 'approved');
 
         if ($filters['date_from']) {
             $query->whereDate('due_date', '>=', $filters['date_from']);

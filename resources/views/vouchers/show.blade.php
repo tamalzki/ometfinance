@@ -233,6 +233,15 @@ document.addEventListener('alpine:init', () => {
     <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
         <div class="flex flex-wrap items-center gap-2">
             <span class="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 {{ $statusTone[$voucher->status] ?? 'bg-slate-100 text-slate-600 ring-slate-200' }}">{{ $voucher->statusLabel() }}</span>
+            @if ($voucher->isPendingApproval())
+                <span class="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-100"><i data-lucide="hourglass" class="h-3 w-3"></i> For Approval</span>
+            @elseif ($voucher->isApprovalRejected())
+                <span class="inline-flex items-center gap-1 rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 ring-1 ring-rose-100"><i data-lucide="x-circle" class="h-3 w-3"></i> Rejected</span>
+            @elseif ($pendingRequest = $voucher->pendingRequest())
+                <span class="inline-flex items-center gap-1 rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-100">
+                    <i data-lucide="git-pull-request" class="h-3 w-3"></i> {{ $pendingRequest->typeLabel() }} Pending Review
+                </span>
+            @endif
             @if ($overdue)
                 <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-semibold text-rose-600 ring-1 ring-rose-100">Overdue</span>
             @endif
@@ -253,6 +262,33 @@ document.addEventListener('alpine:init', () => {
             </a>
         </div>
     </div>
+
+    {{-- ── Rejection notice ───────────────────────────────────────────────── --}}
+    @if ($latestRequest = $voucher->latestRequest())
+        @if ($latestRequest->status === \App\Models\VoucherRequest::STATUS_REJECTED)
+        <div class="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3.5 shadow-sm">
+            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rose-100">
+                <i data-lucide="x-circle" class="h-4 w-4 text-rose-600"></i>
+            </span>
+            <div class="min-w-0 flex-1">
+                <p class="text-[13px] font-semibold text-rose-800">
+                    {{ $latestRequest->typeLabel() }} Rejected by {{ $latestRequest->reviewedBy->name ?? 'CFO' }}
+                    <span class="font-normal text-rose-500">· {{ $latestRequest->reviewed_at?->diffForHumans() }}</span>
+                </p>
+                <p class="mt-1 text-[12.5px] italic text-rose-700">
+                    "{{ $latestRequest->review_note ?: 'No reason was provided.' }}"
+                </p>
+                @if ($latestRequest->isCreate())
+                <p class="mt-1.5 text-[11.5px] text-rose-500">This voucher was not approved. It stays on record for reference only.</p>
+                @elseif ($latestRequest->isEdit())
+                <p class="mt-1.5 text-[11.5px] text-rose-500">The voucher keeps its original, already-approved values. You can submit another edit request.</p>
+                @else
+                <p class="mt-1.5 text-[11.5px] text-rose-500">The voucher remains active and unchanged. You can submit another delete request.</p>
+                @endif
+            </div>
+        </div>
+        @endif
+    @endif
 
     {{-- ── Check voucher document ──────────────────────────────────────── --}}
     @include('vouchers.partials.check-voucher-document')

@@ -3,6 +3,7 @@
     $oldEntries = old('entries', []);
 
     $voucherEntries = $voucher->entries->map(fn ($e) => [
+        'id'          => $e->id,
         'category_id' => (string) ($e->category_id ?? ''),
         'entry_type'  => $e->entry_type,
         'amount'      => number_format((float) $e->amount, 2, '.', ''),
@@ -183,6 +184,7 @@ document.addEventListener('alpine:init', () => {
                 this.$nextTick(() => document.getElementById('entry-error-banner')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
                 return;
             }
+            form.dispatchEvent(new Event('form:submitting'));
             form.submit();
         },
         attachmentError: '',
@@ -200,6 +202,8 @@ document.addEventListener('alpine:init', () => {
     }));
 });
 </script>
+
+<x-unsaved-changes-guard selector="#voucherForm" />
 
 <div class="mx-auto max-w-4xl px-4 py-8" x-data="createVoucherPage">
 
@@ -227,7 +231,7 @@ document.addEventListener('alpine:init', () => {
         </div>
     @endif
 
-    <form method="POST" action="{{ route('vouchers.update', $voucher) }}" enctype="multipart/form-data"
+    <form id="voucherForm" method="POST" action="{{ route('vouchers.update', $voucher) }}" enctype="multipart/form-data"
           @submit.prevent="validateAndSubmit($el)">
         @csrf
         @method('PUT')
@@ -277,6 +281,14 @@ document.addEventListener('alpine:init', () => {
 
                     <div class="mt-4">
                         <label class="mb-1.5 block text-[11px] font-medium text-gray-600">Voucher Source</label>
+                        @if ($lockedSource ?? null)
+                            <input type="hidden" name="source" value="{{ $lockedSource }}">
+                            <div class="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-[12.5px] font-medium text-slate-500">
+                                <i data-lucide="lock" class="h-3.5 w-3.5"></i>
+                                {{ $sources[$lockedSource] ?? $lockedSource }}
+                                <span class="text-[11px] font-normal text-slate-400">— locked to your office</span>
+                            </div>
+                        @else
                         <div class="flex flex-wrap gap-2.5">
                             @foreach ($sources as $key => $label)
                                 <label class="flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2.5 text-[12.5px] font-medium transition"
@@ -291,6 +303,7 @@ document.addEventListener('alpine:init', () => {
                                 </label>
                             @endforeach
                         </div>
+                        @endif
                     </div>
                 </div>
 
@@ -591,6 +604,7 @@ document.addEventListener('alpine:init', () => {
                                     </button>
                                 </div>
                                 <input type="hidden" :name="`entries[${idx}][entry_type]`" :value="entry.entry_type">
+                                <input type="hidden" :name="`entries[${idx}][id]`" :value="entry.id">
 
                                 {{-- Category combobox --}}
                                 <div class="relative flex-[2] min-w-[180px]" @click.outside="entry._catOpen = false">
@@ -787,6 +801,18 @@ document.addEventListener('alpine:init', () => {
                 </p>
             </template>
 
+            @if (auth()->user()->isAccounting() && $voucher->approval_status === 'approved')
+            <div class="rounded-lg border border-violet-200 bg-violet-50/40 p-4">
+                <label class="text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                    Reason for this change <span class="font-semibold text-red-400">*</span>
+                </label>
+                <p class="mt-0.5 text-[11px] text-slate-500">This voucher is already approved — your change goes to the CFO as an edit request, not applied directly.</p>
+                <textarea name="reason" rows="2" required
+                          class="mt-2 block w-full rounded-lg border-violet-200 text-[13px] focus:border-violet-400 focus:ring-violet-400"
+                          placeholder="e.g. Corrected payee name and added the installation fee missed in the original voucher.">{{ old('reason') }}</textarea>
+            </div>
+            @endif
+
             <div class="flex items-center justify-between gap-3">
                 <p class="text-[11px] text-slate-400">
                     Fields marked <span class="font-semibold text-red-400">*</span> are required.
@@ -799,7 +825,7 @@ document.addEventListener('alpine:init', () => {
                     <button type="submit"
                             :disabled="!!attachmentError || !isBalanced"
                             class="inline-flex items-center gap-2 rounded-lg bg-omet-blue px-6 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue disabled:cursor-not-allowed disabled:opacity-50">
-                        <i data-lucide="check" class="h-4 w-4"></i> Update Voucher
+                        <i data-lucide="check" class="h-4 w-4"></i> {{ auth()->user()->isAccounting() && $voucher->approval_status === 'approved' ? 'Submit Edit Request' : 'Update Voucher' }}
                     </button>
                 </div>
             </div>
