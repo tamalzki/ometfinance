@@ -66,6 +66,7 @@ class Voucher extends Model
         'transaction_type', 'category_id', 'po_number', 'reference', 'amount_payable',
         'mode_of_payment', 'status', 'approval_status', 'particular', 'notes',
         'remarks', 'source_of_fund', 'or_ref', 'change_amount',
+        'prepared_by', 'approved_by', 'approved_at',
     ];
 
     protected $casts = [
@@ -81,6 +82,7 @@ class Voucher extends Model
         'source_of_fund'  => 'encrypted',
         'or_ref'          => 'encrypted',
         'change_amount'   => 'decimal:2',
+        'approved_at'     => 'datetime',
     ];
 
     /* ── relationships ─────────────────────────────────────────────────── */
@@ -98,6 +100,22 @@ class Voucher extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ProjectCategory::class, 'category_id');
+    }
+
+    public function preparedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'prepared_by');
+    }
+
+    public function approvedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    /** Job-title label for the signature block — e.g. "CFO". */
+    public function approverPositionLabel(): ?string
+    {
+        return $this->approvedBy?->positionLabel();
     }
 
     public function payments(): HasMany

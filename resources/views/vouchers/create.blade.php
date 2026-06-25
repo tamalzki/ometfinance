@@ -744,18 +744,19 @@ document.addEventListener('alpine:init', () => {
                     <i data-lucide="paperclip" class="h-3.5 w-3.5 text-slate-500"></i>
                 </span>
                 <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Attachments <span class="ml-1 font-normal normal-case text-slate-400">(optional)</span>
+                    Attachments <span class="ml-1 font-normal normal-case text-red-500">(required)</span>
                 </h2>
             </div>
             <div class="px-6 py-5">
-                <p class="mb-3 text-[10.5px] text-gray-400">PDF, images, Word or Excel · max 10 MB each</p>
-                <input type="file" name="attachments[]" multiple
+                <p class="mb-3 text-[10.5px] text-gray-400">PDF, images, Word or Excel · max 10 MB each · at least one file is required</p>
+                <input type="file" name="attachments[]" multiple required
                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
                        @change="validateAttachments($event.target)"
                        class="block w-full cursor-pointer text-[12px] text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-omet-blue file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-white hover:file:bg-omet-lightblue">
                 <p x-show="attachmentError" x-cloak class="mt-1.5 text-[11px] font-medium text-red-600">
                     <span x-text="attachmentError"></span> exceeds the 10 MB limit.
                 </p>
+                @error('attachments')<p class="mt-1.5 text-[11px] font-medium text-red-600">{{ $message }}</p>@enderror
             </div>
         </div>
 

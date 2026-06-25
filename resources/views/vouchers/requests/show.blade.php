@@ -174,6 +174,30 @@
             @include('vouchers.partials.check-voucher-document', ['voucher' => $voucher])
         @endif
 
+        <p class="mb-2 mt-5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            <i data-lucide="paperclip" class="h-3 w-3"></i> Attachments
+            <span class="font-normal normal-case text-slate-400">({{ $voucher->attachments->count() }})</span>
+        </p>
+        @if ($voucher->attachments->isEmpty())
+            <p class="rounded-lg border border-dashed border-slate-200 px-3 py-2.5 text-center text-[12px] text-slate-400">No supporting documents attached.</p>
+        @else
+            <ul class="divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                @foreach ($voucher->attachments as $a)
+                    <li class="flex items-center justify-between gap-3 px-3 py-2 text-[12px]">
+                        <a href="{{ route('vouchers.attachments.download', $a) }}" class="flex min-w-0 items-center gap-2 text-slate-700 hover:text-omet-blue hover:underline">
+                            <i data-lucide="file-text" class="h-3.5 w-3.5 shrink-0 text-slate-400"></i>
+                            <span class="truncate">{{ $a->original_name }}</span>
+                        </a>
+                        <div class="flex shrink-0 items-center gap-2 text-[10.5px] text-slate-400">
+                            <span>{{ $a->humanSize() }}</span>
+                            <span>·</span>
+                            <span>{{ $a->created_at->format('M d, Y') }}</span>
+                        </div>
+                    </li>
+                @endforeach
+            </ul>
+        @endif
+
         @if ($voucherRequest->reason)
         <p class="mb-1.5 mt-5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Reason for {{ $voucherRequest->isCreate() ? 'submission' : ($voucherRequest->isEdit() ? 'edit' : 'deletion') }} (from staff)</p>
         <blockquote class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-[12.5px] italic text-slate-600">

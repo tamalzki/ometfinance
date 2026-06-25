@@ -751,19 +751,39 @@ document.addEventListener('alpine:init', () => {
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100">
                     <i data-lucide="paperclip" class="h-3.5 w-3.5 text-slate-500"></i>
                 </span>
+                @php $hasExistingAttachments = $voucher->attachments->isNotEmpty(); @endphp
                 <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                    Attachments <span class="ml-1 font-normal normal-case text-slate-400">(optional)</span>
+                    Attachments
+                    @if ($hasExistingAttachments)
+                        <span class="ml-1 font-normal normal-case text-slate-400">(optional — already has {{ $voucher->attachments->count() }})</span>
+                    @else
+                        <span class="ml-1 font-normal normal-case text-red-500">(required)</span>
+                    @endif
                 </h2>
             </div>
             <div class="px-6 py-5">
-                <p class="mb-3 text-[10.5px] text-gray-400">PDF, images, Word or Excel · max 10 MB each</p>
-                <input type="file" name="attachments[]" multiple
+                @if ($hasExistingAttachments)
+                <ul class="mb-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                    @foreach ($voucher->attachments as $a)
+                    <li class="flex items-center justify-between gap-3 px-3 py-2 text-[12px]">
+                        <a href="{{ route('vouchers.attachments.download', $a) }}" class="flex min-w-0 items-center gap-2 text-slate-700 hover:text-omet-blue hover:underline">
+                            <i data-lucide="file-text" class="h-3.5 w-3.5 shrink-0 text-slate-400"></i>
+                            <span class="truncate">{{ $a->original_name }}</span>
+                        </a>
+                        <span class="shrink-0 text-[10.5px] text-slate-400">{{ $a->humanSize() }}</span>
+                    </li>
+                    @endforeach
+                </ul>
+                @endif
+                <p class="mb-3 text-[10.5px] text-gray-400">PDF, images, Word or Excel · max 10 MB each{{ $hasExistingAttachments ? '' : ' · at least one file is required' }}</p>
+                <input type="file" name="attachments[]" multiple @if (! $hasExistingAttachments) required @endif
                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
                        @change="validateAttachments($event.target)"
                        class="block w-full cursor-pointer text-[12px] text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-omet-blue file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-white hover:file:bg-omet-lightblue">
                 <p x-show="attachmentError" x-cloak class="mt-1.5 text-[11px] font-medium text-red-600">
                     <span x-text="attachmentError"></span> exceeds the 10 MB limit.
                 </p>
+                @error('attachments')<p class="mt-1.5 text-[11px] font-medium text-red-600">{{ $message }}</p>@enderror
             </div>
         </div>
 

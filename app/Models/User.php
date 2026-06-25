@@ -22,6 +22,7 @@ class User extends Authenticatable
         'email',
         'role',
         'source',
+        'position',
         'password',
     ];
 
@@ -52,5 +53,20 @@ class User extends Authenticatable
     public function lockedSource(): ?string
     {
         return $this->isAccounting() ? ($this->source ?: 'mindanao') : null;
+    }
+
+    /**
+     * Display title — a per-user override (e.g. "Accounting Head" for a
+     * specific accounting-role user) falling back to a role-based default.
+     * Permissions are still driven entirely by `role`; this is label-only.
+     */
+    public function positionLabel(): string
+    {
+        return $this->position ?: match ($this->role) {
+            'admin'      => 'Admin',
+            'cfo'        => 'Chief Finance Officer',
+            'accounting' => 'Accounting',
+            default      => ucfirst((string) $this->role),
+        };
     }
 }

@@ -231,7 +231,7 @@
             <div class="min-w-0 flex-1 leading-tight">
                 <p class="truncate text-[12.5px] font-semibold text-white">{{ $user->name }}</p>
                 <p class="truncate text-[11px] text-slate-400">
-                    {{ $user->isCfo() ? 'CFO' : ($user->isAccounting() ? 'Accounting' : 'Admin') }} · {{ $user->email }}
+                    {{ $user->positionLabel() }} · {{ $user->email }}
                 </p>
             </div>
             <form method="POST" action="{{ route('logout') }}" class="shrink-0">

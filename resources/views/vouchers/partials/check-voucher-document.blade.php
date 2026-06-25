@@ -214,6 +214,32 @@
             <span class="mt-1 block text-slate-700">as payment for the particular shown above.</span>
         </p>
     </div>
+
+    {{-- Prepared by / Approved by signature block --}}
+    <div class="mt-6 flex flex-wrap items-start justify-between gap-6 border-t border-slate-300 pt-4 text-[11px]">
+        <div class="min-w-[180px]">
+            <p class="text-[9px] font-bold uppercase tracking-wide text-slate-500">Prepared by</p>
+            <p class="mt-1 border-b border-slate-400 pb-1 font-semibold text-slate-900">
+                {{ $voucher->preparedBy?->name ?? '—' }}
+            </p>
+        </div>
+
+        <div class="min-w-[220px] text-right">
+            <p class="text-[9px] font-bold uppercase tracking-wide text-slate-500">Approved by</p>
+            @if ($voucher->approved_at)
+                <p class="mt-1 border-b border-slate-400 pb-1 font-semibold text-slate-900">
+                    <i data-lucide="check-circle-2" class="inline-block h-3 w-3 align-text-bottom text-emerald-600"></i>
+                    {{ $voucher->approvedBy?->name ?? '—' }}
+                    @if ($voucher->approverPositionLabel())
+                        <span class="font-normal text-slate-600">— {{ $voucher->approverPositionLabel() }}</span>
+                    @endif
+                </p>
+                <p class="mt-0.5 text-[10px] text-slate-500">Approved on {{ $voucher->approved_at->format('M j, Y \a\t g:i A') }}</p>
+            @else
+                <p class="mt-1 border-b border-slate-300 pb-1 font-medium text-slate-400">Pending CFO approval</p>
+            @endif
+        </div>
+    </div>
 </div>
 
 <style>

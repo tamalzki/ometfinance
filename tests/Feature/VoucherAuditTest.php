@@ -193,6 +193,8 @@ class VoucherAuditTest extends TestCase
 
     public function test_update_rejects_unbalanced_entries_without_partial_save(): void
     {
+        Storage::fake('local');
+
         $user = User::factory()->create(['role' => 'admin']);
         $project = Project::first();
         $category = ProjectCategory::first();
@@ -217,6 +219,7 @@ class VoucherAuditTest extends TestCase
             'amount_payable'  => 1000,
             'mode_of_payment' => 'cash',
             'payment_status'  => 'unpaid',
+            'attachments'     => [UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf')],
             'entries' => [
                 ['category_id' => $category->id, 'entry_type' => 'debit', 'amount' => 1000],
                 ['category_id' => $category->id, 'entry_type' => 'credit', 'amount' => 700],
@@ -234,6 +237,8 @@ class VoucherAuditTest extends TestCase
 
     public function test_store_rejects_unbalanced_entries(): void
     {
+        Storage::fake('local');
+
         $user = User::factory()->create(['role' => 'admin']);
         $category = ProjectCategory::first();
 
@@ -248,6 +253,7 @@ class VoucherAuditTest extends TestCase
             'amount_payable'  => 500,
             'mode_of_payment' => 'cash',
             'payment_status'  => 'unpaid',
+            'attachments'     => [UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf')],
             'entries' => [
                 ['category_id' => $category->id, 'entry_type' => 'debit', 'amount' => 500],
                 ['category_id' => $category->id, 'entry_type' => 'credit', 'amount' => 300],

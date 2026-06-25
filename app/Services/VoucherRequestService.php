@@ -20,7 +20,11 @@ class VoucherRequestService
             $voucher = $request->voucher;
 
             match ($request->type) {
-                VoucherRequest::TYPE_CREATE => $voucher->update(['approval_status' => 'approved']),
+                VoucherRequest::TYPE_CREATE => $voucher->update([
+                    'approval_status' => 'approved',
+                    'approved_by'     => $reviewer->id,
+                    'approved_at'     => now(),
+                ]),
                 VoucherRequest::TYPE_EDIT   => self::applyEdit($voucher, $request),
                 VoucherRequest::TYPE_DELETE => VoucherService::destroyVoucher($voucher),
                 default => null,

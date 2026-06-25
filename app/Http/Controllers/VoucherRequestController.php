@@ -40,7 +40,7 @@ class VoucherRequestController extends Controller
     public function show(VoucherRequest $voucherRequest): View
     {
         $voucherRequest->load([
-            'voucher' => fn ($q) => $q->withTrashed()->with(['project', 'entries.category', 'entries.project']),
+            'voucher' => fn ($q) => $q->withTrashed()->with(['project', 'entries.category', 'entries.project', 'attachments', 'preparedBy', 'approvedBy']),
             'requestedBy', 'reviewedBy',
         ]);
 

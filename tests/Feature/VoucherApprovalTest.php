@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Models\Voucher;
 use App\Models\VoucherRequest;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class VoucherApprovalTest extends TestCase
@@ -26,11 +28,19 @@ class VoucherApprovalTest extends TestCase
         ];
     }
 
+    /** @return array{attachments: array<UploadedFile>} */
+    private function withAttachment(): array
+    {
+        Storage::fake('local');
+
+        return ['attachments' => [UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf')]];
+    }
+
     public function test_accounting_store_creates_pending_voucher_with_create_request(): void
     {
         $staff = User::factory()->create(['role' => 'accounting']);
 
-        $response = $this->actingAs($staff)->post(route('vouchers.store'), $this->basePayload('APR-001') + ['reason' => 'New supplier invoice']);
+        $response = $this->actingAs($staff)->post(route('vouchers.store'), $this->basePayload('APR-001') + $this->withAttachment() + ['reason' => 'New supplier invoice']);
 
         $voucher = Voucher::where('voucher_no', 'APR-001')->first();
         $this->assertNotNull($voucher);
@@ -49,7 +59,7 @@ class VoucherApprovalTest extends TestCase
     {
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->actingAs($admin)->post(route('vouchers.store'), $this->basePayload('APR-002'));
+        $this->actingAs($admin)->post(route('vouchers.store'), $this->basePayload('APR-002') + $this->withAttachment());
 
         $voucher = Voucher::where('voucher_no', 'APR-002')->first();
         $this->assertNotNull($voucher);
@@ -63,7 +73,7 @@ class VoucherApprovalTest extends TestCase
 
         $voucher = Voucher::create($this->basePayload('APR-003') + ['approval_status' => 'approved']);
 
-        $payload = $this->basePayload('APR-003');
+        $payload = $this->basePayload('APR-003') + $this->withAttachment();
         $payload['payee_name'] = 'Changed Payee';
         $payload['reason'] = 'Corrected payee name';
 
@@ -85,7 +95,7 @@ class VoucherApprovalTest extends TestCase
 
         $voucher = Voucher::create($this->basePayload('APR-004') + ['approval_status' => 'pending']);
 
-        $payload = $this->basePayload('APR-004');
+        $payload = $this->basePayload('APR-004') + $this->withAttachment();
         $payload['payee_name'] = 'Edited Before Approval';
 
         $this->actingAs($staff)->put(route('vouchers.update', $voucher), $payload);
@@ -115,7 +125,7 @@ class VoucherApprovalTest extends TestCase
     {
         $bgcStaff = User::factory()->create(['role' => 'accounting', 'source' => 'bgc']);
 
-        $payload = $this->basePayload('APR-040');
+        $payload = $this->basePayload('APR-040') + $this->withAttachment();
         $payload['source'] = 'mindanao'; // attempt to tamper — should be ignored
 
         $this->actingAs($bgcStaff)->post(route('vouchers.store'), $payload);
@@ -130,7 +140,7 @@ class VoucherApprovalTest extends TestCase
 
         $voucher = Voucher::create($this->basePayload('APR-041') + ['approval_status' => 'approved', 'source' => 'bgc']);
 
-        $payload = $this->basePayload('APR-041');
+        $payload = $this->basePayload('APR-041') + $this->withAttachment();
         $payload['source'] = 'mindanao';
         $payload['reason'] = 'tamper attempt';
 
@@ -318,5 +328,120 @@ class VoucherApprovalTest extends TestCase
         $this->actingAs($admin)->get(route('voucher-requests.show', $editRequest))->assertOk();
         $this->actingAs($admin)->get(route('voucher-requests.show', $deleteRequest))->assertOk();
         $this->actingAs($admin)->get(route('voucher-requests.index'))->assertOk();
+    }
+
+    public function test_store_without_attachment_is_rejected(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $response = $this->actingAs($admin)->post(route('vouchers.store'), $this->basePayload('APR-050'));
+
+        $response->assertSessionHasErrors('attachments');
+        $this->assertNull(Voucher::where('voucher_no', 'APR-050')->first());
+    }
+
+    public function test_update_requires_attachment_when_voucher_has_none(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $voucher = Voucher::create($this->basePayload('APR-051') + ['approval_status' => 'approved']);
+
+        $response = $this->actingAs($admin)->put(route('vouchers.update', $voucher), $this->basePayload('APR-051'));
+
+        $response->assertSessionHasErrors('attachments');
+    }
+
+    public function test_update_does_not_require_attachment_when_voucher_already_has_one(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $voucher = Voucher::create($this->basePayload('APR-052') + ['approval_status' => 'approved']);
+        $voucher->attachments()->create([
+            'uploaded_by'   => $admin->id,
+            'original_name' => 'existing.pdf',
+            'path'          => 'vouchers/existing.pdf',
+            'mime_type'     => 'application/pdf',
+            'size'          => 100,
+        ]);
+
+        $payload = $this->basePayload('APR-052');
+        $payload['payee_name'] = 'Updated Payee';
+
+        $response = $this->actingAs($admin)->put(route('vouchers.update', $voucher), $payload);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertEquals('Updated Payee', $voucher->refresh()->payee_name);
+    }
+
+    public function test_cfo_can_see_attachment_when_reviewing_request(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $staff = User::factory()->create(['role' => 'accounting']);
+
+        $voucher = Voucher::create($this->basePayload('APR-053') + ['approval_status' => 'pending']);
+        $voucher->attachments()->create([
+            'uploaded_by'   => $staff->id,
+            'original_name' => 'supplier-invoice.pdf',
+            'path'          => 'vouchers/supplier-invoice.pdf',
+            'mime_type'     => 'application/pdf',
+            'size'          => 200,
+        ]);
+        $request = $voucher->approvalRequests()->create(['type' => VoucherRequest::TYPE_CREATE, 'requested_by' => $staff->id]);
+
+        $response = $this->actingAs($admin)->get(route('voucher-requests.show', $request));
+
+        $response->assertOk();
+        $response->assertSee('supplier-invoice.pdf');
+    }
+
+    public function test_admin_store_self_approves_with_prepared_and_approved_by_set(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)->post(route('vouchers.store'), $this->basePayload('APR-060') + $this->withAttachment());
+
+        $voucher = Voucher::where('voucher_no', 'APR-060')->first();
+        $this->assertEquals($admin->id, $voucher->prepared_by);
+        $this->assertEquals($admin->id, $voucher->approved_by);
+        $this->assertNotNull($voucher->approved_at);
+    }
+
+    public function test_accounting_store_is_prepared_but_not_yet_approved(): void
+    {
+        $staff = User::factory()->create(['role' => 'accounting']);
+
+        $this->actingAs($staff)->post(route('vouchers.store'), $this->basePayload('APR-061') + $this->withAttachment());
+
+        $voucher = Voucher::where('voucher_no', 'APR-061')->first();
+        $this->assertEquals($staff->id, $voucher->prepared_by);
+        $this->assertNull($voucher->approved_by);
+        $this->assertNull($voucher->approved_at);
+    }
+
+    public function test_cfo_approving_create_request_stamps_approved_by(): void
+    {
+        $cfo   = User::factory()->create(['role' => 'cfo']);
+        $staff = User::factory()->create(['role' => 'accounting']);
+
+        $voucher = Voucher::create($this->basePayload('APR-062') + ['approval_status' => 'pending', 'prepared_by' => $staff->id]);
+        $request = $voucher->approvalRequests()->create(['type' => VoucherRequest::TYPE_CREATE, 'requested_by' => $staff->id]);
+
+        $this->actingAs($cfo)->post(route('voucher-requests.approve', $request));
+
+        $voucher->refresh();
+        $this->assertEquals($cfo->id, $voucher->approved_by);
+        $this->assertNotNull($voucher->approved_at);
+        $this->assertEquals('Chief Finance Officer', $voucher->approverPositionLabel());
+    }
+
+    public function test_custom_position_overrides_role_default_label(): void
+    {
+        $head = User::factory()->create(['role' => 'accounting', 'source' => 'mindanao', 'position' => 'Accounting Head']);
+        $plainStaff = User::factory()->create(['role' => 'accounting', 'source' => 'mindanao']);
+
+        $this->assertEquals('Accounting Head', $head->positionLabel());
+        $this->assertEquals('Accounting', $plainStaff->positionLabel());
+
+        // Same functional scope as any accounting user — locked source, restricted access.
+        $this->assertEquals('mindanao', $head->lockedSource());
+        $this->assertTrue($head->isAccounting());
     }
 }

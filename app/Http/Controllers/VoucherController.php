@@ -44,7 +44,7 @@ class VoucherController extends Controller
         $dateFrom  = $request->query('date_from');
         $dateTo    = $request->query('date_to');
 
-        $query = Voucher::with(['project', 'entries.project', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments', 'approvalRequests'])
+        $query = Voucher::with(['project', 'entries.project', 'entries.category.parent', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments', 'approvalRequests'])
             ->orderByDesc('voucher_date')
             ->orderByDesc('id');
 
@@ -166,7 +166,7 @@ class VoucherController extends Controller
 
     public function show(Voucher $voucher): View
     {
-        $voucher->load(['project', 'sourceBankAccount.entity', 'category.parent', 'payments.bankAccount', 'attachments', 'entries.project', 'entries.category', 'approvalRequests']);
+        $voucher->load(['project', 'sourceBankAccount.entity', 'category.parent', 'payments.bankAccount', 'attachments', 'entries.project', 'entries.category', 'approvalRequests', 'preparedBy', 'approvedBy']);
 
         return view('vouchers.show', [
             'voucher'            => $voucher,
@@ -241,7 +241,7 @@ class VoucherController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $data = $this->validateVoucher($request);
-        $this->validateAttachments($request);
+        $this->validateAttachments($request, required: true);
         $entryRows = $this->validateAndBalanceEntries($request);
 
         $isAccounting = auth()->user()->isAccounting();
@@ -251,6 +251,14 @@ class VoucherController extends Controller
 
         $data['status'] = 'unpaid';
         $data['approval_status'] = $isAccounting ? 'pending' : 'approved';
+        $data['prepared_by'] = auth()->id();
+
+        // Admin/CFO creating directly means there's no separate review step —
+        // they're approving it themselves the moment they hit save.
+        if (! $isAccounting) {
+            $data['approved_by'] = auth()->id();
+            $data['approved_at'] = now();
+        }
 
         // Accounting Staff are locked to the office they were invited for —
         // ignore whatever source the form submitted and use theirs instead.
@@ -309,7 +317,7 @@ class VoucherController extends Controller
     public function update(Request $request, Voucher $voucher): RedirectResponse
     {
         $data = $this->validateVoucher($request, $voucher);
-        $this->validateAttachments($request);
+        $this->validateAttachments($request, required: $voucher->attachments()->doesntExist());
         $entryRows = $this->validateAndBalanceEntries($request);
 
         if ($lockedSource = auth()->user()->lockedSource()) {
@@ -656,11 +664,19 @@ class VoucherController extends Controller
             ->with('success', "Edit request for voucher {$voucher->voucher_no} submitted for CFO approval.");
     }
 
-    private function validateAttachments(Request $request): void
+    /**
+     * @param bool $required When true, at least one attachment must already
+     * be on the voucher or be uploaded in this request — used on create, and
+     * on update for any voucher that still has none (legacy records can keep
+     * saving other changes without being forced to backfill one immediately).
+     */
+    private function validateAttachments(Request $request, bool $required = false): void
     {
         $request->validate([
-            'attachments'   => ['nullable', 'array'],
+            'attachments'   => [$required ? 'required' : 'nullable', 'array'],
             'attachments.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx,xls,xlsx', 'max:10240'],
+        ], [
+            'attachments.required' => 'Attach at least one supporting document (invoice, receipt, etc.) before saving this voucher.',
         ]);
     }
 

@@ -1,7 +1,7 @@
 <x-guest-layout>
 @php
-    $roleLabel = match ($invite->role) {
-        'cfo'        => 'CFO',
+    $roleLabel = $invite->position ?: match ($invite->role) {
+        'cfo'        => 'Chief Finance Officer',
         'accounting' => 'Accounting',
         default      => 'administrator',
     };
