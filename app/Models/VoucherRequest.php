@@ -83,6 +83,7 @@ class VoucherRequest extends Model
     {
         return [
             'payee_name'             => 'Payee',
+            'payee_address'          => 'Payee Address',
             'amount_payable'         => 'Amount Payable',
             'particular'             => 'Particular',
             'due_date'               => 'Due Date',

@@ -86,7 +86,7 @@ class Voucher extends Model
 
     protected $fillable = [
         'voucher_no', 'voucher_date', 'due_date', 'release_date',
-        'payee_name', 'source', 'project_id', 'source_bank_account_id',
+        'payee_name', 'payee_address', 'source', 'project_id', 'source_bank_account_id',
         'transaction_type', 'source_document_type', 'category_id', 'po_number', 'reference', 'amount_payable',
         'mode_of_payment', 'status', 'approval_status', 'particular', 'notes',
         'remarks', 'source_of_fund', 'or_ref', 'change_amount',

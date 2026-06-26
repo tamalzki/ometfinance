@@ -72,6 +72,7 @@ document.addEventListener('alpine:init', () => {
             due_date:               @json(old('due_date', '')),
             release_date:           @json(old('release_date', '')),
             payee_name:             @json(old('payee_name', '')),
+            payee_address:          @json(old('payee_address', '')),
             source:                 @json(old('source', $defaultSource)),
             source_bank_account_id: @json(old('source_bank_account_id', '')),
             transaction_type:       @json(old('transaction_type', 'rfp')),
@@ -413,6 +414,14 @@ document.addEventListener('alpine:init', () => {
                                 </div>
                             </template>
                             @error('payee_name')<p class="mt-0.5 text-[10.5px] text-red-600">{{ $message }}</p>@enderror
+                        </div>
+
+                        {{-- Payee address --}}
+                        <div class="md:col-span-2">
+                            <label class="mb-1 block text-[11px] font-medium text-gray-600">Payee Address <span class="text-gray-400">(optional)</span></label>
+                            <textarea name="payee_address" x-model="f.payee_address" rows="2" placeholder="e.g. RS Building, Sta Ana Ave., Poblacion District, Davao City"
+                                      class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10"></textarea>
+                            @error('payee_address')<p class="mt-0.5 text-[10.5px] text-red-600">{{ $message }}</p>@enderror
                         </div>
 
                         {{-- Source bank account combobox --}}

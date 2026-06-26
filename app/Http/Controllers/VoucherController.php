@@ -628,6 +628,7 @@ class VoucherController extends Controller
             'due_date'               => ['nullable', 'date'],
             'release_date'           => ['nullable', 'date'],
             'payee_name'             => ['required', 'string', 'max:255'],
+            'payee_address'          => ['nullable', 'string', 'max:1000'],
             'source'                 => ['nullable', Rule::in(array_keys(Voucher::SOURCES))],
             'project_id'             => ['nullable', 'exists:projects,id'],
             'source_bank_account_id' => ['nullable', 'exists:bank_accounts,id'],

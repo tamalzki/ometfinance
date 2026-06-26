@@ -52,7 +52,6 @@
         return implode('  —  ', $parts);
     };
 
-    $defaultAddress = 'RS Building, Sta Ana Ave., Poblacion District, Davao City';
 @endphp
 
 <div class="check-voucher-doc mx-auto max-w-6xl rounded-xl border border-slate-300 bg-white p-8 shadow-sm print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
@@ -94,7 +93,7 @@
             <div>
                 <p class="text-[10px] font-bold uppercase tracking-wide text-slate-800">Address:</p>
                 <div class="mt-0.5 min-h-[2.75rem] rounded border border-slate-400 px-2 py-1.5 text-[11px] leading-snug text-slate-700">
-                    {{ $defaultAddress }}
+                    {{ $voucher->payee_address ?: '—' }}
                 </div>
             </div>
         </div>

@@ -79,6 +79,16 @@
     $user        = auth()->user();
     $userInitial = strtoupper(substr($user->name ?? 'U', 0, 1));
 
+    // "Voucher Register" is a dedicated shortcut for Accounting Staff, who
+    // don't get the full Reports hub below — admin/CFO already reach the
+    // same export from Insights → Reports, so skip the duplicate link.
+    if (! $user->isAccounting()) {
+        foreach ($sections as &$section) {
+            $section['links'] = array_values(array_filter($section['links'], fn ($l) => ($l['route'] ?? '') !== 'reports.vouchers'));
+        }
+        unset($section);
+    }
+
     // CFO sees Dashboard, Categories, Projects, Disbursements, and Reports — not Accounts or Transfers.
     if ($user->isCfo()) {
         // Keep Dashboard and Categories from Workspace (remove Accounts)
@@ -101,6 +111,15 @@
         $sections = array_values(
             array_filter($sections, fn ($s, $i) => ! in_array($i, [1, 2, 4], true), ARRAY_FILTER_USE_BOTH)
         );
+        foreach ($sections as &$section) {
+            foreach ($section['links'] as &$link) {
+                if (($link['route'] ?? '') === 'reports.vouchers') {
+                    $link['name'] = 'Voucher Reports';
+                    $link['icon'] = 'bar-chart-3';
+                }
+            }
+        }
+        unset($section, $link);
     }
 
     if (! $user->isAdmin() && ! $user->isCfo()) {
@@ -142,7 +161,7 @@
     <div class="mx-5 h-px bg-white/10"></div>
 
     {{-- Nav --}}
-    <nav class="flex-1 overflow-y-auto px-3 py-4" @click="if (window.innerWidth < 1024) sidebarOpen = false">
+    <nav class="sidebar-nav-scroll flex-1 overflow-y-auto px-3 py-4" @click="if (window.innerWidth < 1024) sidebarOpen = false">
         @foreach ($sections as $sectionIndex => $section)
             @php
                 $isGroup = isset($section['group']);

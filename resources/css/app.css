@@ -1223,4 +1223,29 @@
         border: 2px solid rgb(250 251 251);
         background-clip: padding-box;
     }
+
+    /* Sidebar nav — thin, near-invisible scrollbar that matches the dark
+       rail instead of the browser's default light/wide track. */
+    .sidebar-nav-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: rgb(51 65 85) transparent;
+    }
+
+    .sidebar-nav-scroll::-webkit-scrollbar {
+        width: 5px;
+    }
+
+    .sidebar-nav-scroll::-webkit-scrollbar-track {
+        background: transparent;
+    }
+
+    .sidebar-nav-scroll::-webkit-scrollbar-thumb {
+        background: rgb(51 65 85);
+        border-radius: 99px;
+        background-clip: padding-box;
+    }
+
+    .sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
+        background: rgb(71 85 105);
+    }
 }

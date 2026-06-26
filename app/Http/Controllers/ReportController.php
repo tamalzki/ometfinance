@@ -697,11 +697,11 @@ class ReportController extends Controller
                     number_format($data['vouchersReport']['grand_balance'], 2, '.', ''),
                 ];
                 return [
-                    'title'        => 'Voucher Register',
+                    'title'        => auth()->user()->isAccounting() ? 'Voucher Reports' : 'Voucher Register',
                     'range'        => $range,
                     'headings'     => ['Voucher', 'Date', 'Payee', 'Project', 'Source', 'Type', 'Status', 'Payable', 'Paid', 'Balance'],
                     'rows'         => $rows,
-                    'filename_key' => 'voucher-register',
+                    'filename_key' => auth()->user()->isAccounting() ? 'voucher-reports' : 'voucher-register',
                     'orientation'  => 'landscape',
                     'view_data'    => $data,
                 ];

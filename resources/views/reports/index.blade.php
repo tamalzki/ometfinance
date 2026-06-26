@@ -16,10 +16,12 @@
         unset($tabs['account-balances'], $tabs['transfers']);
     }
 
-    // Accounting Staff only get the Voucher Register export — the other
+    // Accounting Staff only get the Voucher Reports export — the other
     // reports cover org-wide cash/balances/projects outside their scope.
     if (auth()->user()->isAccounting()) {
         $tabs = array_intersect_key($tabs, ['vouchers' => true]);
+        $tabs['vouchers']['label'] = 'Voucher Reports';
+        $tabs['vouchers']['icon'] = 'bar-chart-3';
     }
 
     $hasFilters = ! in_array($activeTab, ['overall'], true);
@@ -559,7 +561,7 @@
             @endif
             @break
 
-        {{-- VOUCHER REGISTER --}}
+        {{-- VOUCHER REPORTS / REGISTER --}}
         @case('vouchers')
             @if ($vouchersReport['rows']->isEmpty())
                 <div class="rounded-lg border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
