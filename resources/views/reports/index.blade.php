@@ -8,12 +8,20 @@
         'transfers'        => ['label' => 'Transfers',        'icon' => 'arrow-left-right','route' => 'reports.transfers'],
         'collections'      => ['label' => 'Collections',      'icon' => 'arrow-down-circle','route' => 'reports.collections'],
         'payables'         => ['label' => 'Payables Aging',   'icon' => 'alarm-clock',      'route' => 'reports.payables'],
+        'vouchers'         => ['label' => 'Voucher Register', 'icon' => 'receipt',          'route' => 'reports.vouchers'],
     ];
 
     // CFO cannot access account-balances or transfers reports.
     if (auth()->user()->isCfo()) {
         unset($tabs['account-balances'], $tabs['transfers']);
     }
+
+    // Accounting Staff only get the Voucher Register export — the other
+    // reports cover org-wide cash/balances/projects outside their scope.
+    if (auth()->user()->isAccounting()) {
+        $tabs = array_intersect_key($tabs, ['vouchers' => true]);
+    }
+
     $hasFilters = ! in_array($activeTab, ['overall'], true);
     $reportRouteUrl = route($tabs[$activeTab]['route']);
 @endphp
@@ -78,7 +86,7 @@
                        class="mt-1 h-9 min-w-[8.5rem] rounded-md border border-slate-200 bg-white px-3 text-[12.5px] text-slate-700 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
             </div>
 
-            @if (in_array($activeTab, ['cash-outflow', 'collections', 'payables'], true))
+            @if (in_array($activeTab, ['cash-outflow', 'collections', 'payables', 'vouchers'], true))
                 <div>
                     <label class="block text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Project</label>
                     <select name="project_id"
@@ -88,6 +96,39 @@
                             <option value="{{ $p->id }}" {{ (string) $filters['project_id'] === (string) $p->id ? 'selected' : '' }}>
                                 {{ $p->name }}{{ $p->kind === 'in_house' ? ' (in-house)' : '' }}
                             </option>
+                        @endforeach
+                    </select>
+                </div>
+            @endif
+
+            @if ($activeTab === 'vouchers')
+                <div>
+                    <label class="block text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Source</label>
+                    <select name="source"
+                            class="mt-1 h-9 min-w-[9rem] rounded-md border border-slate-200 bg-white px-2 text-[12.5px] text-slate-700 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
+                        <option value="">All sources</option>
+                        @foreach ($sourcesForFilter as $key => $label)
+                            <option value="{{ $key }}" {{ $filters['source'] === $key ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Status</label>
+                    <select name="status"
+                            class="mt-1 h-9 min-w-[10rem] rounded-md border border-slate-200 bg-white px-2 text-[12.5px] text-slate-700 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
+                        <option value="">All statuses</option>
+                        @foreach ($statusesForFilter as $key => $label)
+                            <option value="{{ $key }}" {{ $filters['status'] === $key ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Type</label>
+                    <select name="transaction_type"
+                            class="mt-1 h-9 min-w-[11rem] rounded-md border border-slate-200 bg-white px-2 text-[12.5px] text-slate-700 outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
+                        <option value="">All types</option>
+                        @foreach ($typesForFilter as $key => $label)
+                            <option value="{{ $key }}" {{ $filters['transaction_type'] === $key ? 'selected' : '' }}>{{ $label }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -169,6 +210,9 @@
                 @case('payables')
                     {{ $payables['row_count'] ?? 0 }} open payables across {{ count($payables['groups'] ?? []) }} aging buckets
                     @break
+                @case('vouchers')
+                    {{ $vouchersReport['row_count'] ?? 0 }} voucher{{ ($vouchersReport['row_count'] ?? 0) === 1 ? '' : 's' }}
+                    @break
                 @default
                     Snapshot as of {{ $overall['generated_at']->format('M j, Y g:i A') }}
             @endswitch
@@ -184,6 +228,9 @@
                 <input type="hidden" name="entity"     value="{{ $filters['entity'] }}">
                 <input type="hidden" name="account_id" value="{{ $filters['account_id'] }}">
                 <input type="hidden" name="category_id" value="{{ $filters['category_id'] }}">
+                <input type="hidden" name="source"     value="{{ $filters['source'] }}">
+                <input type="hidden" name="status"     value="{{ $filters['status'] }}">
+                <input type="hidden" name="transaction_type" value="{{ $filters['transaction_type'] }}">
                 <button type="submit"
                         class="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[12px] font-medium text-slate-600 hover:bg-slate-50">
                     <i data-lucide="file-down" class="h-3.5 w-3.5"></i>
@@ -199,6 +246,9 @@
                 <input type="hidden" name="entity"     value="{{ $filters['entity'] }}">
                 <input type="hidden" name="account_id" value="{{ $filters['account_id'] }}">
                 <input type="hidden" name="category_id" value="{{ $filters['category_id'] }}">
+                <input type="hidden" name="source"     value="{{ $filters['source'] }}">
+                <input type="hidden" name="status"     value="{{ $filters['status'] }}">
+                <input type="hidden" name="transaction_type" value="{{ $filters['transaction_type'] }}">
                 <button type="submit"
                         class="inline-flex h-9 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 text-[12px] font-medium text-slate-600 hover:bg-slate-50">
                     <i data-lucide="file-spreadsheet" class="h-3.5 w-3.5"></i>
@@ -502,6 +552,67 @@
                             <tr>
                                 <td colspan="4" class="text-right text-[11px] font-bold uppercase tracking-wide text-omet-navy">Total Outstanding</td>
                                 <td class="text-right text-[13px] font-bold tabular-nums text-rose-600">{{ $fmt($payables['grand_total']) }}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            @endif
+            @break
+
+        {{-- VOUCHER REGISTER --}}
+        @case('vouchers')
+            @if ($vouchersReport['rows']->isEmpty())
+                <div class="rounded-lg border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+                    No vouchers found for the selected filters.
+                </div>
+            @else
+                <div class="data-grid overflow-x-auto">
+                    <table class="min-w-full">
+                        <thead>
+                            <tr class="bg-slate-50">
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Voucher</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Date</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Payee</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Project</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Source</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Type</th>
+                                <th class="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status</th>
+                                <th class="text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Payable</th>
+                                <th class="text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Paid</th>
+                                <th class="text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        @foreach ($vouchersReport['rows'] as $v)
+                            @php
+                                $statusTone = match ($v->status) {
+                                    'paid'      => 'text-emerald-700',
+                                    'cancelled' => 'text-slate-400',
+                                    'pdc'       => 'text-indigo-600',
+                                    'partial'   => 'text-amber-700',
+                                    default     => 'text-rose-600',
+                                };
+                            @endphp
+                            <tr class="hover:bg-slate-50/70 {{ $loop->even ? 'bg-slate-50/30' : '' }}">
+                                <td class="font-semibold text-slate-700 whitespace-nowrap">{{ $v->voucher_no }}</td>
+                                <td class="tabular-nums text-slate-600 whitespace-nowrap">{{ optional($v->voucher_date)->format('M j, Y') ?? '—' }}</td>
+                                <td class="text-slate-700">{{ $v->payee_name }}</td>
+                                <td class="text-slate-500">{{ $v->project?->name ?? '—' }}</td>
+                                <td class="text-slate-500">{{ $v->sourceLabel() }}</td>
+                                <td class="text-slate-500">{{ $v->typeLabel() }}</td>
+                                <td class="font-semibold {{ $statusTone }}">{{ $v->statusLabel() }}</td>
+                                <td class="text-right tabular-nums text-slate-700">{{ $fmt($v->amount_payable) }}</td>
+                                <td class="text-right tabular-nums text-emerald-700">{{ $fmt($v->amountPaid()) }}</td>
+                                <td class="text-right font-semibold tabular-nums {{ $v->balanceDue() > 0 ? 'text-rose-600' : 'text-slate-400' }}">{{ $fmt($v->balanceDue()) }}</td>
+                            </tr>
+                        @endforeach
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="7" class="text-right text-[11px] font-bold uppercase tracking-wide text-omet-navy">Grand Total</td>
+                                <td class="text-right text-[13px] font-bold tabular-nums text-omet-navy">{{ $fmt($vouchersReport['grand_payable']) }}</td>
+                                <td class="text-right text-[13px] font-bold tabular-nums text-emerald-700">{{ $fmt($vouchersReport['grand_paid']) }}</td>
+                                <td class="text-right text-[13px] font-bold tabular-nums text-rose-600">{{ $fmt($vouchersReport['grand_balance']) }}</td>
                             </tr>
                         </tfoot>
                     </table>

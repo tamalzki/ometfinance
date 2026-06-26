@@ -372,6 +372,72 @@ class ReportController extends Controller
     }
 
     /* ─────────────────────────────────────────────────────────────────
+     *  REPORT 6 — Voucher Register (Accounting Staff export tool)
+     *
+     *  Lets Accounting filter and export their vouchers by source
+     *  (Main / BGC), status (paid / unpaid / etc.), project, and type.
+     *  Accounting Staff only ever see what they themselves submitted,
+     *  mirroring the same scoping VoucherController::index() applies.
+     * ───────────────────────────────────────────────────────────────── */
+
+    public function vouchers(Request $request): View
+    {
+        $filters = $this->parseFilters($request);
+
+        $query = Voucher::with(['project', 'sourceBankAccount.entity', 'payments']);
+
+        if (auth()->user()->isAccounting()) {
+            $query->whereHas('approvalRequests', fn ($q) => $q
+                ->where('type', \App\Models\VoucherRequest::TYPE_CREATE)
+                ->where('requested_by', auth()->id()));
+        }
+
+        if ($filters['date_from']) {
+            $query->whereDate('voucher_date', '>=', $filters['date_from']);
+        }
+        if ($filters['date_to']) {
+            $query->whereDate('voucher_date', '<=', $filters['date_to']);
+        }
+        if ($filters['project_id']) {
+            $query->where('project_id', $filters['project_id']);
+        }
+        if ($filters['source']) {
+            $query->where('source', $filters['source']);
+        }
+        if ($filters['status']) {
+            $query->where('status', $filters['status']);
+        }
+        if ($filters['transaction_type']) {
+            $query->where('transaction_type', $filters['transaction_type']);
+        }
+
+        $vouchers = $query->orderBy('voucher_date')->orderBy('id')->get();
+
+        // Encrypted columns — aggregates computed in PHP via model helpers.
+        $grandPayable = (float) $vouchers->sum(fn ($v) => (float) $v->amount_payable);
+        $grandPaid    = (float) $vouchers->sum(fn ($v) => $v->amountPaid());
+        $grandBalance = (float) $vouchers->sum(fn ($v) => $v->balanceDue());
+
+        return view('reports.index', [
+            'activeTab'         => 'vouchers',
+            'vouchersReport'     => [
+                'rows'          => $vouchers,
+                'grand_payable' => $grandPayable,
+                'grand_paid'    => $grandPaid,
+                'grand_balance' => $grandBalance,
+                'row_count'     => $vouchers->count(),
+            ],
+            'filters'            => $filters,
+            'entities'           => $this->allEntities(),
+            'projectsForFilter'  => $this->allProjects(),
+            'accountsForFilter'  => $this->allAccounts(),
+            'sourcesForFilter'   => Voucher::SOURCES,
+            'statusesForFilter'  => Voucher::STATUSES,
+            'typesForFilter'     => Voucher::TYPES,
+        ]);
+    }
+
+    /* ─────────────────────────────────────────────────────────────────
      *  EXPORT — PDF
      * ───────────────────────────────────────────────────────────────── */
 
@@ -416,24 +482,30 @@ class ReportController extends Controller
     private function parseFilters(Request $request): array
     {
         return [
-            'date_from'   => $request->filled('date_from') ? Carbon::parse($request->input('date_from'))->toDateString() : null,
-            'date_to'     => $request->filled('date_to')   ? Carbon::parse($request->input('date_to'))->toDateString()   : null,
-            'project_id'  => $request->input('project_id') ?: null,
-            'entity'      => $request->input('entity') ?: null,
-            'account_id'  => $request->input('account_id') ?: null,
-            'category_id' => $request->input('category_id') ?: null,
+            'date_from'        => $request->filled('date_from') ? Carbon::parse($request->input('date_from'))->toDateString() : null,
+            'date_to'          => $request->filled('date_to')   ? Carbon::parse($request->input('date_to'))->toDateString()   : null,
+            'project_id'       => $request->input('project_id') ?: null,
+            'entity'           => $request->input('entity') ?: null,
+            'account_id'       => $request->input('account_id') ?: null,
+            'category_id'      => $request->input('category_id') ?: null,
+            'source'           => $request->input('source') ?: null,
+            'status'           => $request->input('status') ?: null,
+            'transaction_type' => $request->input('transaction_type') ?: null,
         ];
     }
 
     private function emptyFilters(): array
     {
         return [
-            'date_from'   => null,
-            'date_to'     => null,
-            'project_id'  => null,
-            'entity'      => null,
-            'account_id'  => null,
-            'category_id' => null,
+            'date_from'        => null,
+            'date_to'          => null,
+            'project_id'       => null,
+            'entity'           => null,
+            'account_id'       => null,
+            'category_id'      => null,
+            'source'           => null,
+            'status'           => null,
+            'transaction_type' => null,
         ];
     }
 
@@ -597,6 +669,40 @@ class ReportController extends Controller
                     'rows'         => $rows,
                     'filename_key' => 'payables',
                     'orientation'  => 'portrait',
+                    'view_data'    => $data,
+                ];
+
+            case 'vouchers':
+                $req = new Request($filters);
+                $data = $this->vouchers($req)->getData();
+                $rows = [];
+                foreach ($data['vouchersReport']['rows'] as $v) {
+                    $rows[] = [
+                        $v->voucher_no,
+                        optional($v->voucher_date)->format('Y-m-d'),
+                        $v->payee_name,
+                        $v->project?->name ?? '',
+                        $v->sourceLabel(),
+                        $v->typeLabel(),
+                        $v->statusLabel(),
+                        number_format((float) $v->amount_payable, 2, '.', ''),
+                        number_format($v->amountPaid(), 2, '.', ''),
+                        number_format($v->balanceDue(), 2, '.', ''),
+                    ];
+                }
+                $rows[] = [
+                    '', '', '', '', '', '', 'GRAND TOTAL',
+                    number_format($data['vouchersReport']['grand_payable'], 2, '.', ''),
+                    number_format($data['vouchersReport']['grand_paid'], 2, '.', ''),
+                    number_format($data['vouchersReport']['grand_balance'], 2, '.', ''),
+                ];
+                return [
+                    'title'        => 'Voucher Register',
+                    'range'        => $range,
+                    'headings'     => ['Voucher', 'Date', 'Payee', 'Project', 'Source', 'Type', 'Status', 'Payable', 'Paid', 'Balance'],
+                    'rows'         => $rows,
+                    'filename_key' => 'voucher-register',
+                    'orientation'  => 'landscape',
                     'view_data'    => $data,
                 ];
 

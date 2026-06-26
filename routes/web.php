@@ -127,6 +127,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/reports/transfers',                      [\App\Http\Controllers\ReportController::class, 'transfers'])->name('reports.transfers')->middleware('role:admin');
     Route::get('/reports/collections',                    [\App\Http\Controllers\ReportController::class, 'collections'])->name('reports.collections');
     Route::get('/reports/payables',                       [\App\Http\Controllers\ReportController::class, 'payables'])->name('reports.payables');
+    Route::get('/reports/vouchers',                       [\App\Http\Controllers\ReportController::class, 'vouchers'])->name('reports.vouchers');
     Route::post('/reports/export/pdf',                    [\App\Http\Controllers\ReportController::class, 'exportPdf'])->name('reports.exportPdf');
     Route::post('/reports/export/excel',                  [\App\Http\Controllers\ReportController::class, 'exportExcel'])->name('reports.exportExcel');
 

@@ -31,6 +31,7 @@
             'links' => [
                 ['name' => 'Daily Transactions', 'route' => 'vouchers.index', 'icon' => 'receipt', 'pattern' => 'vouchers.index'],
                 ['name' => 'Payables',  'route' => 'vouchers.payables', 'icon' => 'alarm-clock', 'pattern' => 'vouchers.payables'],
+                ['name' => 'Voucher Register', 'route' => 'reports.vouchers', 'icon' => 'file-down', 'pattern' => 'reports.vouchers'],
                 ['name' => 'Voucher Approvals', 'route' => 'voucher-requests.index', 'icon' => 'git-pull-request', 'pattern' => 'voucher-requests.*', 'cfoAdminOnly' => true],
                 ['name' => 'Payment Verification', 'route' => 'voucher-requests.index', 'params' => ['type' => 'payment'], 'icon' => 'banknote', 'pattern' => 'voucher-requests.*', 'cfoAdminOnly' => true],
             ],
