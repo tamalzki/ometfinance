@@ -282,6 +282,146 @@ class VoucherApprovalTest extends TestCase
         $this->assertEquals('Still needed, keep it.', $request->review_note);
     }
 
+    public function test_accounting_pay_creates_payment_request_instead_of_recording_directly(): void
+    {
+        $staff = User::factory()->create(['role' => 'accounting']);
+        $voucher = Voucher::create($this->basePayload('APR-080') + ['approval_status' => 'approved']);
+
+        $response = $this->actingAs($staff)->post(route('vouchers.payments.store', $voucher), [
+            'paid_on' => now()->toDateString(),
+            'amount'  => 1000,
+        ] + $this->withAttachment());
+
+        $response->assertRedirect();
+        $voucher->refresh();
+        $this->assertEquals('unpaid', $voucher->status, 'Voucher must stay unpaid until the CFO verifies the payment.');
+        $this->assertEquals(0, $voucher->payments()->count());
+
+        $request = VoucherRequest::where('voucher_id', $voucher->id)->first();
+        $this->assertNotNull($request);
+        $this->assertEquals(VoucherRequest::TYPE_PAYMENT, $request->type);
+        $this->assertEquals(VoucherRequest::STATUS_PENDING, $request->status);
+        $this->assertEquals(1000, (float) $request->payload['amount']);
+    }
+
+    public function test_admin_pay_records_payment_directly_without_request(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $voucher = Voucher::create($this->basePayload('APR-081') + ['approval_status' => 'approved']);
+
+        $response = $this->actingAs($admin)->post(route('vouchers.payments.store', $voucher), [
+            'paid_on' => now()->toDateString(),
+            'amount'  => 1000,
+        ] + $this->withAttachment());
+
+        $response->assertRedirect();
+        $voucher->refresh();
+        $this->assertEquals('paid', $voucher->status);
+        $this->assertEquals(1, $voucher->payments()->count());
+        $this->assertEquals(0, VoucherRequest::where('voucher_id', $voucher->id)->count());
+    }
+
+    public function test_pay_without_attachment_is_rejected(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $voucher = Voucher::create($this->basePayload('APR-082') + ['approval_status' => 'approved']);
+
+        $response = $this->actingAs($admin)->post(route('vouchers.payments.store', $voucher), [
+            'paid_on' => now()->toDateString(),
+            'amount'  => 1000,
+        ]);
+
+        $response->assertSessionHasErrors('attachments');
+        $voucher->refresh();
+        $this->assertEquals('unpaid', $voucher->status);
+    }
+
+    public function test_accounting_cannot_submit_second_payment_request_while_one_is_pending(): void
+    {
+        $staff = User::factory()->create(['role' => 'accounting']);
+        $voucher = Voucher::create($this->basePayload('APR-083') + ['approval_status' => 'approved']);
+        $voucher->approvalRequests()->create(['type' => VoucherRequest::TYPE_PAYMENT, 'requested_by' => $staff->id, 'payload' => ['amount' => 500, 'paid_on' => now()->toDateString()]]);
+
+        $response = $this->actingAs($staff)->post(route('vouchers.payments.store', $voucher), [
+            'paid_on' => now()->toDateString(),
+            'amount'  => 500,
+        ] + $this->withAttachment());
+
+        $response->assertSessionHasErrors('amount');
+        $this->assertEquals(1, VoucherRequest::where('voucher_id', $voucher->id)->count());
+    }
+
+    public function test_cfo_approve_on_payment_request_records_payment_and_syncs_outflow_for_in_house_project(): void
+    {
+        $cfo = User::factory()->create(['role' => 'cfo']);
+        $staff = User::factory()->create(['role' => 'accounting']);
+        $inHouse = Project::where('kind', 'in_house')->first();
+        $category = ProjectCategory::first();
+
+        if (! $inHouse || ! $category) {
+            $this->markTestSkipped('Need an in-house Project and a ProjectCategory in DB to test against.');
+        }
+
+        $voucher = Voucher::create($this->basePayload('APR-084') + ['approval_status' => 'approved']);
+        $voucher->entries()->create(['category_id' => $category->id, 'entry_type' => 'debit', 'amount' => 1000, 'project_id' => $inHouse->id, 'sort_order' => 0]);
+        $voucher->entries()->create(['category_id' => $category->id, 'entry_type' => 'credit', 'amount' => 1000, 'sort_order' => 1]);
+
+        $request = $voucher->approvalRequests()->create([
+            'type' => VoucherRequest::TYPE_PAYMENT,
+            'requested_by' => $staff->id,
+            'payload' => ['bank_account_id' => null, 'paid_on' => now()->toDateString(), 'amount' => 1000, 'mode' => 'cash'],
+        ]);
+
+        $this->actingAs($cfo)->post(route('voucher-requests.approve', $request));
+
+        $voucher->refresh();
+        $this->assertEquals('paid', $voucher->status);
+        $this->assertEquals(1, $voucher->payments()->count());
+        $this->assertEquals(
+            1,
+            \App\Models\ProjectExpense::where('voucher_id', $voucher->id)->where('project_id', $inHouse->id)->count(),
+            'Approving a payment request must populate project outflow even for in-house projects.'
+        );
+    }
+
+    public function test_cfo_reject_on_payment_request_leaves_voucher_unpaid(): void
+    {
+        $cfo = User::factory()->create(['role' => 'cfo']);
+        $staff = User::factory()->create(['role' => 'accounting']);
+        $voucher = Voucher::create($this->basePayload('APR-085') + ['approval_status' => 'approved']);
+
+        $request = $voucher->approvalRequests()->create([
+            'type' => VoucherRequest::TYPE_PAYMENT,
+            'requested_by' => $staff->id,
+            'payload' => ['bank_account_id' => null, 'paid_on' => now()->toDateString(), 'amount' => 1000, 'mode' => 'cash'],
+        ]);
+
+        $this->actingAs($cfo)->post(route('voucher-requests.reject', $request), ['review_note' => 'Wrong amount.']);
+
+        $voucher->refresh();
+        $this->assertEquals('unpaid', $voucher->status);
+        $this->assertEquals(0, $voucher->payments()->count());
+    }
+
+    public function test_payment_verification_tab_lists_payment_requests(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $staff = User::factory()->create(['role' => 'accounting']);
+
+        $voucher = Voucher::create($this->basePayload('APR-086') + ['approval_status' => 'approved']);
+        $voucher->approvalRequests()->create([
+            'type' => VoucherRequest::TYPE_PAYMENT,
+            'requested_by' => $staff->id,
+            'payload' => ['amount' => 750, 'paid_on' => now()->toDateString()],
+        ]);
+
+        $response = $this->actingAs($admin)->get(route('voucher-requests.index', ['type' => 'payment']));
+
+        $response->assertOk();
+        $response->assertSee('APR-086');
+        $response->assertSee('Payment Verification');
+    }
+
     public function test_accounting_index_only_shows_own_submitted_vouchers(): void
     {
         $staff = User::factory()->create(['role' => 'accounting']);
@@ -546,5 +686,34 @@ class VoucherApprovalTest extends TestCase
         // Same functional scope as any accounting user — locked source, restricted access.
         $this->assertEquals('mindanao', $head->lockedSource());
         $this->assertTrue($head->isAccounting());
+    }
+
+    public function test_failed_store_stages_attachment_and_kept_token_finalizes_on_retry(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        // Submit with a valid attachment but an invalid amount — store() should fail
+        // validation, but the attachment should be staged and a kept_attachment_tokens
+        // entry flashed back instead of being silently dropped.
+        $payload = $this->basePayload('APR-070');
+        $payload['amount_payable'] = -5;
+        $response = $this->actingAs($admin)->post(route('vouchers.store'), $payload + $this->withAttachment());
+
+        $response->assertSessionHasErrors('amount_payable');
+        $tokens = $response->getSession()->get('_old_input')['kept_attachment_tokens'] ?? null;
+        $this->assertNotEmpty($tokens, 'Expected a kept_attachment_tokens entry to be flashed on validation failure.');
+        $this->assertNull(Voucher::where('voucher_no', 'APR-070')->first());
+
+        // Retry with the corrected field, no new file, just the kept token — should succeed
+        // and finalize the staged file onto the new voucher.
+        $payload['amount_payable'] = 1000;
+        $payload['kept_attachment_tokens'] = $tokens;
+        $response = $this->actingAs($admin)->post(route('vouchers.store'), $payload);
+
+        $voucher = Voucher::where('voucher_no', 'APR-070')->first();
+        $this->assertNotNull($voucher);
+        $response->assertSessionHasNoErrors();
+        $this->assertEquals(1, $voucher->attachments()->count());
+        $this->assertEquals('invoice.pdf', $voucher->attachments()->first()->original_name);
     }
 }

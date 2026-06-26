@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BankAccount;
 use App\Models\VoucherRequest;
 use App\Services\VoucherRequestService;
 use Illuminate\Http\RedirectResponse;
@@ -10,6 +11,13 @@ use Illuminate\View\View;
 
 class VoucherRequestController extends Controller
 {
+    private const TYPES = [
+        VoucherRequest::TYPE_CREATE,
+        VoucherRequest::TYPE_EDIT,
+        VoucherRequest::TYPE_DELETE,
+        VoucherRequest::TYPE_PAYMENT,
+    ];
+
     public function index(Request $request): View
     {
         $type   = $request->query('type');
@@ -23,16 +31,17 @@ class VoucherRequestController extends Controller
             ->where('status', $status)
             ->latest();
 
-        if ($type && in_array($type, [VoucherRequest::TYPE_CREATE, VoucherRequest::TYPE_EDIT, VoucherRequest::TYPE_DELETE], true)) {
+        if ($type && in_array($type, self::TYPES, true)) {
             $query->where('type', $type);
         }
 
         $requests = $query->get();
 
         $counts = [
-            'create' => VoucherRequest::where('status', VoucherRequest::STATUS_PENDING)->where('type', VoucherRequest::TYPE_CREATE)->count(),
-            'edit'   => VoucherRequest::where('status', VoucherRequest::STATUS_PENDING)->where('type', VoucherRequest::TYPE_EDIT)->count(),
-            'delete' => VoucherRequest::where('status', VoucherRequest::STATUS_PENDING)->where('type', VoucherRequest::TYPE_DELETE)->count(),
+            'create'  => VoucherRequest::where('status', VoucherRequest::STATUS_PENDING)->where('type', VoucherRequest::TYPE_CREATE)->count(),
+            'edit'    => VoucherRequest::where('status', VoucherRequest::STATUS_PENDING)->where('type', VoucherRequest::TYPE_EDIT)->count(),
+            'delete'  => VoucherRequest::where('status', VoucherRequest::STATUS_PENDING)->where('type', VoucherRequest::TYPE_DELETE)->count(),
+            'payment' => VoucherRequest::where('status', VoucherRequest::STATUS_PENDING)->where('type', VoucherRequest::TYPE_PAYMENT)->count(),
         ];
 
         return view('vouchers.requests.index', [
@@ -46,7 +55,7 @@ class VoucherRequestController extends Controller
     public function show(VoucherRequest $voucherRequest): View
     {
         $voucherRequest->load([
-            'voucher' => fn ($q) => $q->withTrashed()->with(['project', 'entries.category', 'entries.project', 'attachments', 'preparedBy', 'approvedBy']),
+            'voucher' => fn ($q) => $q->withTrashed()->with(['project', 'entries.category', 'entries.project', 'attachments', 'preparedBy', 'approvedBy', 'payments']),
             'requestedBy', 'reviewedBy',
         ]);
 
@@ -55,6 +64,7 @@ class VoucherRequestController extends Controller
             'changedFields'   => $voucherRequest->isEdit() ? $voucherRequest->changedFields() : [],
             'unchangedFields' => $voucherRequest->isEdit() ? $voucherRequest->unchangedFields() : [],
             'entriesDiff'     => $voucherRequest->isEdit() ? $voucherRequest->entriesDiff() : null,
+            'accounts'        => $voucherRequest->isPayment() ? BankAccount::with('entity')->orderBy('name')->get() : collect(),
         ]);
     }
 

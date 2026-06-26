@@ -410,6 +410,9 @@ document.addEventListener('alpine:init', () => {
                     $lockReason = $v->isPendingApproval()
                         ? 'Waiting for CFO approval'
                         : ($v->isApprovalRejected() ? 'Rejected by CFO — not actionable' : null);
+                    $pendingReq = $v->pendingRequest();
+                    $payLocked = $notYetApproved || $pendingReq !== null;
+                    $payLockReason = $notYetApproved ? $lockReason : ($pendingReq ? $pendingReq->typeLabel() . ' is already pending review for this voucher.' : null);
                     $entryProjects = $v->entries->pluck('project')->filter()->unique('id')->values();
                     $rowProjects   = $entryProjects->isNotEmpty() ? $entryProjects : ($v->project ? collect([$v->project]) : collect());
                     $rowCategories = $v->entries->pluck('category')->filter()->unique('id')->values();
@@ -509,6 +512,9 @@ document.addEventListener('alpine:init', () => {
                                 <i data-lucide="{{ $v->sourceDocumentIcon() }}" class="h-3 w-3"></i>
                                 {{ $v->sourceDocumentLabel() }}
                             </span>
+                            @if ($v->po_number)
+                                <span class="mt-1 block text-[10px] text-slate-500">{{ $v->sourceDocumentNumberLabel() }}: <span class="font-medium text-slate-600">{{ $v->po_number }}</span></span>
+                            @endif
                         @else
                             <span class="text-slate-300">—</span>
                         @endif
@@ -521,7 +527,7 @@ document.addEventListener('alpine:init', () => {
                         @elseif ($v->isApprovalRejected())
                             <span class="mt-1 block w-fit cursor-help rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-600 ring-1 ring-rose-100"
                                   title="{{ $v->latestRequest()?->review_note ?: 'No reason was provided.' }}">Rejected — hover for reason</span>
-                        @elseif ($pendingReq = $v->pendingRequest())
+                        @elseif ($pendingReq)
                             <span class="mt-1 block w-fit rounded-md bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-100">{{ $pendingReq->typeLabel() }}</span>
                         @endif
                     </td>
@@ -529,12 +535,12 @@ document.addEventListener('alpine:init', () => {
                         <div class="flex flex-row flex-nowrap items-center justify-end gap-1.5">
                             @if ($v->isOpen())
                                 <button type="button"
-                                        @if ($notYetApproved) disabled title="{{ $lockReason }}"
+                                        @if ($payLocked) disabled title="{{ $payLockReason }}"
                                         @else @click="openPay({{ \Illuminate\Support\Js::from($payload) }})" @endif
                                         @class([
                                             'inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition',
-                                            'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' => ! $notYetApproved,
-                                            'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400' => $notYetApproved,
+                                            'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' => ! $payLocked,
+                                            'cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400' => $payLocked,
                                         ])>
                                     <i data-lucide="banknote" class="h-3 w-3 pointer-events-none"></i> Pay
                                 </button>

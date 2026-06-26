@@ -25,8 +25,9 @@ class VoucherRequestService
                     'approved_by'     => $reviewer->id,
                     'approved_at'     => now(),
                 ]),
-                VoucherRequest::TYPE_EDIT   => self::applyEdit($voucher, $request),
-                VoucherRequest::TYPE_DELETE => VoucherService::destroyVoucher($voucher),
+                VoucherRequest::TYPE_EDIT    => self::applyEdit($voucher, $request),
+                VoucherRequest::TYPE_DELETE  => VoucherService::destroyVoucher($voucher),
+                VoucherRequest::TYPE_PAYMENT => self::applyPayment($voucher, $request),
                 default => null,
             };
 
@@ -44,7 +45,8 @@ class VoucherRequestService
             if ($request->isCreate()) {
                 $request->voucher->update(['approval_status' => 'rejected']);
             }
-            // Edit/delete requests leave the live voucher untouched on reject.
+            // Edit/delete/payment requests leave the live voucher untouched on reject —
+            // a rejected payment simply never gets recorded, voucher stays unpaid.
 
             $request->update([
                 'status'      => VoucherRequest::STATUS_REJECTED,
@@ -76,5 +78,12 @@ class VoucherRequestService
         }
 
         VoucherService::recompute($voucher->fresh());
+    }
+
+    private static function applyPayment(Voucher $voucher, VoucherRequest $request): void
+    {
+        if ($request->payload) {
+            VoucherService::recordPayment($voucher, $request->payload);
+        }
     }
 }

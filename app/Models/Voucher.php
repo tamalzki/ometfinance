@@ -301,6 +301,12 @@ class Voucher extends Model
         return self::SOURCE_DOCUMENT_ICONS[$this->source_document_type] ?? 'file-question';
     }
 
+    /** Label for this voucher's reference-number field, e.g. "PO Number" — value lives in po_number. */
+    public function sourceDocumentNumberLabel(): string
+    {
+        return self::SOURCE_DOCUMENT_NUMBER_LABELS[$this->source_document_type] ?? 'Reference No.';
+    }
+
     public function modeLabel(): string
     {
         return self::MODES[$this->mode_of_payment] ?? ($this->mode_of_payment ? ucfirst($this->mode_of_payment) : '—');

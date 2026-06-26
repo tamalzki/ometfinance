@@ -4,9 +4,10 @@
     $voucher = $voucherRequest->voucher;
 
     $typeTone = [
-        'create' => 'bg-amber-50 text-amber-700 ring-amber-100',
-        'edit'   => 'bg-violet-50 text-violet-700 ring-violet-100',
-        'delete' => 'bg-rose-50 text-rose-600 ring-rose-100',
+        'create'  => 'bg-amber-50 text-amber-700 ring-amber-100',
+        'edit'    => 'bg-violet-50 text-violet-700 ring-violet-100',
+        'delete'  => 'bg-rose-50 text-rose-600 ring-rose-100',
+        'payment' => 'bg-emerald-50 text-emerald-700 ring-emerald-100',
     ];
 
     $amountChange = collect($changedFields)->firstWhere('key', 'amount_payable');
@@ -170,6 +171,59 @@
         @elseif ($voucherRequest->isCreate())
             <p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Full voucher details</p>
             @include('vouchers.partials.check-voucher-document', ['voucher' => $voucher])
+        @elseif ($voucherRequest->isPayment())
+            @php
+                $payload = $voucherRequest->payload ?? [];
+                $payAccount = ! empty($payload['bank_account_id']) ? $accounts->firstWhere('id', (int) $payload['bank_account_id']) : null;
+            @endphp
+            <p class="mb-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2.5 text-[12.5px] text-emerald-700">
+                Approving posts this payment — deducts the bank account, updates the voucher status, and syncs project outflow. Rejecting leaves the voucher unpaid.
+            </p>
+            <p class="mb-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Proposed payment</p>
+            <div class="overflow-hidden rounded-lg border border-slate-200">
+                <table class="w-full">
+                    <tbody class="divide-y divide-slate-100 text-[12.5px]">
+                        <tr>
+                            <td class="w-1/3 bg-slate-50 px-3 py-2 font-medium text-slate-500">Amount</td>
+                            <td class="px-3 py-2 font-bold text-omet-navy">{{ $peso($payload['amount'] ?? 0) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-slate-50 px-3 py-2 font-medium text-slate-500">Balance due (current)</td>
+                            <td class="px-3 py-2 text-slate-700">{{ $peso($voucher->balanceDue()) }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-slate-50 px-3 py-2 font-medium text-slate-500">Paid on</td>
+                            <td class="px-3 py-2 text-slate-700">{{ \Illuminate\Support\Carbon::parse($payload['paid_on'] ?? null)->format('M j, Y') }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-slate-50 px-3 py-2 font-medium text-slate-500">Bank account</td>
+                            <td class="px-3 py-2 text-slate-700">{{ $payAccount ? (($payAccount->entity?->name ? $payAccount->entity->name . ' — ' : '') . $payAccount->name) : '— none —' }}</td>
+                        </tr>
+                        <tr>
+                            <td class="bg-slate-50 px-3 py-2 font-medium text-slate-500">Mode of payment</td>
+                            <td class="px-3 py-2 text-slate-700">{{ \App\Models\Voucher::MODES[$payload['mode'] ?? ''] ?? '—' }}</td>
+                        </tr>
+                        @if (! empty($payload['check_no']))
+                        <tr>
+                            <td class="bg-slate-50 px-3 py-2 font-medium text-slate-500">Check no.</td>
+                            <td class="px-3 py-2 text-slate-700">{{ $payload['check_no'] }}</td>
+                        </tr>
+                        @endif
+                        @if (! empty($payload['check_date']))
+                        <tr>
+                            <td class="bg-slate-50 px-3 py-2 font-medium text-slate-500">Check date</td>
+                            <td class="px-3 py-2 text-slate-700">{{ \Illuminate\Support\Carbon::parse($payload['check_date'])->format('M j, Y') }}</td>
+                        </tr>
+                        @endif
+                        @if (! empty($payload['notes']))
+                        <tr>
+                            <td class="bg-slate-50 px-3 py-2 font-medium text-slate-500">Notes</td>
+                            <td class="px-3 py-2 text-slate-700">{{ $payload['notes'] }}</td>
+                        </tr>
+                        @endif
+                    </tbody>
+                </table>
+            </div>
         @else {{-- delete --}}
             <p class="mb-2 rounded-lg border border-rose-100 bg-rose-50/50 px-3 py-2.5 text-[12.5px] text-rose-700">
                 Approving will delete this voucher and reverse any ledger or project rows it posted. Rejecting leaves it active and unchanged.
@@ -215,18 +269,19 @@
             <form method="POST" action="{{ route('voucher-requests.approve', $voucherRequest) }}">
                 @csrf
                 <button type="submit" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">
-                    <i data-lucide="check" class="h-4 w-4"></i> Approve {{ $voucherRequest->isEdit() ? 'Changes' : '' }}
+                    <i data-lucide="check" class="h-4 w-4"></i> Approve {{ $voucherRequest->isEdit() ? 'Changes' : ($voucherRequest->isPayment() ? '& Record Payment' : '') }}
                 </button>
             </form>
 
             <button type="button" @click="showRejectNote = ! showRejectNote"
                 class="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-5 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-100">
-                <i data-lucide="x" class="h-4 w-4"></i> Reject {{ $voucherRequest->isEdit() ? 'Changes' : '' }}
+                <i data-lucide="x" class="h-4 w-4"></i> Reject {{ $voucherRequest->isEdit() ? 'Changes' : ($voucherRequest->isPayment() ? 'Payment' : '') }}
             </button>
 
             <span class="text-[11px] text-slate-400">
                 @if ($voucherRequest->isEdit()) Rejecting will keep the original approved values.
                 @elseif ($voucherRequest->isCreate()) Rejecting marks the voucher as Rejected.
+                @elseif ($voucherRequest->isPayment()) Rejecting leaves the voucher unpaid — no payment is posted.
                 @else Rejecting leaves the voucher active.
                 @endif
             </span>

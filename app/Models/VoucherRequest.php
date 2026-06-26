@@ -20,6 +20,7 @@ class VoucherRequest extends Model
     public const TYPE_CREATE = 'create';
     public const TYPE_EDIT = 'edit';
     public const TYPE_DELETE = 'delete';
+    public const TYPE_PAYMENT = 'payment';
 
     public const STATUS_PENDING = 'pending';
     public const STATUS_APPROVED = 'approved';
@@ -57,13 +58,15 @@ class VoucherRequest extends Model
     public function isCreate(): bool   { return $this->type === self::TYPE_CREATE; }
     public function isEdit(): bool     { return $this->type === self::TYPE_EDIT; }
     public function isDelete(): bool   { return $this->type === self::TYPE_DELETE; }
+    public function isPayment(): bool  { return $this->type === self::TYPE_PAYMENT; }
 
     public function typeLabel(): string
     {
         return match ($this->type) {
-            self::TYPE_CREATE => 'For Approval',
+            self::TYPE_CREATE  => 'For Approval',
             self::TYPE_EDIT    => 'Edit Request',
             self::TYPE_DELETE  => 'Delete Request',
+            self::TYPE_PAYMENT => 'Payment Verification',
             default            => ucfirst($this->type),
         };
     }

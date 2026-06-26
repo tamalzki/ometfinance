@@ -216,6 +216,10 @@ document.addEventListener('alpine:init', () => {
                 this.attachmentError = '';
             }
         },
+        keptAttachments: @json($pendingAttachments ?? []),
+        removeKept(token) {
+            this.keptAttachments = this.keptAttachments.filter(a => a.token !== token);
+        },
     }));
 });
 </script>
@@ -828,8 +832,24 @@ document.addEventListener('alpine:init', () => {
                     @endforeach
                 </ul>
                 @endif
+                <template x-if="keptAttachments.length">
+                    <ul class="mb-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
+                        <template x-for="kept in keptAttachments" :key="kept.token">
+                            <li class="flex items-center justify-between gap-3 px-3 py-2 text-[12px]">
+                                <input type="hidden" name="kept_attachment_tokens[]" :value="kept.token">
+                                <span class="flex min-w-0 items-center gap-2 text-slate-700">
+                                    <i data-lucide="file-text" class="h-3.5 w-3.5 shrink-0 text-slate-400"></i>
+                                    <span class="truncate" x-text="kept.name"></span>
+                                </span>
+                                <button type="button" @click="removeKept(kept.token)" class="shrink-0 text-slate-400 transition hover:text-red-500" title="Remove">
+                                    <i data-lucide="x" class="h-3.5 w-3.5"></i>
+                                </button>
+                            </li>
+                        </template>
+                    </ul>
+                </template>
                 <p class="mb-3 text-[10.5px] text-gray-400">PDF, images, Word or Excel · max 10 MB each{{ $hasExistingAttachments ? '' : ' · at least one file is required' }}</p>
-                <input type="file" name="attachments[]" multiple @if (! $hasExistingAttachments) required @endif
+                <input type="file" name="attachments[]" multiple :required="{{ $hasExistingAttachments ? 'false' : 'keptAttachments.length === 0' }}"
                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,.xls,.xlsx"
                        @change="validateAttachments($event.target)"
                        class="block w-full cursor-pointer text-[12px] text-slate-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-omet-blue file:px-3 file:py-1.5 file:text-[11px] file:font-semibold file:text-white hover:file:bg-omet-lightblue">

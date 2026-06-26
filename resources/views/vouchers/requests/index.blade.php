@@ -3,16 +3,18 @@
     $peso = fn ($n) => '₱' . number_format((float) $n, 2);
 
     $typeTone = [
-        'create' => 'bg-amber-50 text-amber-700 ring-amber-100',
-        'edit'   => 'bg-violet-50 text-violet-700 ring-violet-100',
-        'delete' => 'bg-rose-50 text-rose-600 ring-rose-100',
+        'create'  => 'bg-amber-50 text-amber-700 ring-amber-100',
+        'edit'    => 'bg-violet-50 text-violet-700 ring-violet-100',
+        'delete'  => 'bg-rose-50 text-rose-600 ring-rose-100',
+        'payment' => 'bg-emerald-50 text-emerald-700 ring-emerald-100',
     ];
 
     $tabs = [
-        ''       => 'All',
-        'create' => 'For Approval',
-        'edit'   => 'Edit Request',
-        'delete' => 'Delete Request',
+        ''        => 'All',
+        'create'  => 'For Approval',
+        'edit'    => 'Edit Request',
+        'delete'  => 'Delete Request',
+        'payment' => 'Payment Verification',
     ];
 
     $activeStatus = $activeStatus ?? 'pending';
@@ -37,18 +39,20 @@
 </div>
 
 {{-- ── Summary cards — 3 inline ───────────────────────────────────────── --}}
-<div class="flex shrink-0 flex-row flex-nowrap gap-2.5">
+<div class="flex shrink-0 flex-row flex-nowrap gap-2.5 overflow-x-auto">
     @foreach ([
-        ['key' => 'create', 'label' => 'For Approval', 'icon' => 'file-plus', 'tone' => 'amber'],
-        ['key' => 'edit',   'label' => 'Edit Request', 'icon' => 'pencil',    'tone' => 'violet'],
-        ['key' => 'delete', 'label' => 'Delete Request', 'icon' => 'trash-2', 'tone' => 'rose'],
+        ['key' => 'create',  'label' => 'For Approval', 'icon' => 'file-plus', 'tone' => 'amber'],
+        ['key' => 'edit',    'label' => 'Edit Request', 'icon' => 'pencil',    'tone' => 'violet'],
+        ['key' => 'delete',  'label' => 'Delete Request', 'icon' => 'trash-2', 'tone' => 'rose'],
+        ['key' => 'payment', 'label' => 'Payment Verification', 'icon' => 'banknote', 'tone' => 'emerald'],
     ] as $card)
     @php
         $active = $activeStatus === 'pending' && ($activeType ?? '') === $card['key'];
         $tone = [
-            'amber'  => ['count' => 'text-amber-700',  'icon' => 'bg-amber-50 text-amber-600',  'active' => 'border-amber-200 ring-1 ring-amber-200'],
-            'violet' => ['count' => 'text-violet-700', 'icon' => 'bg-violet-50 text-violet-600', 'active' => 'border-violet-200 ring-1 ring-violet-200'],
-            'rose'   => ['count' => 'text-rose-600',   'icon' => 'bg-rose-50 text-rose-600',    'active' => 'border-rose-200 ring-1 ring-rose-200'],
+            'amber'   => ['count' => 'text-amber-700',  'icon' => 'bg-amber-50 text-amber-600',  'active' => 'border-amber-200 ring-1 ring-amber-200'],
+            'violet'  => ['count' => 'text-violet-700', 'icon' => 'bg-violet-50 text-violet-600', 'active' => 'border-violet-200 ring-1 ring-violet-200'],
+            'rose'    => ['count' => 'text-rose-600',   'icon' => 'bg-rose-50 text-rose-600',    'active' => 'border-rose-200 ring-1 ring-rose-200'],
+            'emerald' => ['count' => 'text-emerald-700', 'icon' => 'bg-emerald-50 text-emerald-600', 'active' => 'border-emerald-200 ring-1 ring-emerald-200'],
         ][$card['tone']];
     @endphp
     <a href="{{ route('voucher-requests.index', ['type' => $card['key']]) }}"

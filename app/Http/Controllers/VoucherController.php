@@ -139,6 +139,7 @@ class VoucherController extends Controller
             'activeProject'       => $activeProject,
             'defaultSource'       => $defaultSource,
             'lockedSource'        => $lockedSource,
+            'pendingAttachments'  => $this->resolvePendingAttachments(),
         ]);
     }
 
@@ -165,6 +166,7 @@ class VoucherController extends Controller
             'sourceDocumentNumberLabels' => Voucher::SOURCE_DOCUMENT_NUMBER_LABELS,
             'defaultSource'       => $defaultSource,
             'lockedSource'        => $lockedSource,
+            'pendingAttachments'  => $this->resolvePendingAttachments(),
         ]);
     }
 
@@ -246,9 +248,14 @@ class VoucherController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $this->validateVoucher($request);
-        $this->validateAttachments($request, required: true);
-        $entryRows = $this->validateAndBalanceEntries($request);
+        try {
+            $data = $this->validateVoucher($request);
+            $this->validateAttachments($request, required: true);
+            $entryRows = $this->validateAndBalanceEntries($request);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->stagePendingAttachments($request);
+            throw $e;
+        }
 
         $isAccounting = auth()->user()->isAccounting();
 
@@ -322,9 +329,14 @@ class VoucherController extends Controller
 
     public function update(Request $request, Voucher $voucher): RedirectResponse
     {
-        $data = $this->validateVoucher($request, $voucher);
-        $this->validateAttachments($request, required: $voucher->attachments()->doesntExist());
-        $entryRows = $this->validateAndBalanceEntries($request);
+        try {
+            $data = $this->validateVoucher($request, $voucher);
+            $this->validateAttachments($request, required: $voucher->attachments()->doesntExist());
+            $entryRows = $this->validateAndBalanceEntries($request);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->stagePendingAttachments($request);
+            throw $e;
+        }
 
         if ($lockedSource = auth()->user()->lockedSource()) {
             $data['source'] = $lockedSource;
@@ -487,7 +499,34 @@ class VoucherController extends Controller
             'notes'           => ['nullable', 'string', 'max:1000'],
         ]);
 
-        VoucherService::recordPayment($voucher, $data);
+        $this->validateAttachments($request, required: true);
+
+        // Accounting Staff can't post a payment directly — it goes to the CFO
+        // as a payment-verification request instead, same shape as create/
+        // edit/delete. Admin/CFO recording it themselves post immediately.
+        if (auth()->user()->isAccounting()) {
+            if ($voucher->pendingRequest()) {
+                return redirect()->back()->withErrors(['amount' => 'A request is already pending review for this voucher.']);
+            }
+
+            DB::transaction(function () use ($request, $voucher, $data) {
+                $this->saveAttachmentsFromRequest($request, $voucher);
+
+                $voucher->approvalRequests()->create([
+                    'type'         => VoucherRequest::TYPE_PAYMENT,
+                    'requested_by' => auth()->id(),
+                    'payload'      => $data,
+                ]);
+            });
+
+            return redirect()->back()
+                ->with('success', "Payment of ₱" . number_format((float) $data['amount'], 2) . " for {$voucher->voucher_no} submitted for CFO verification.");
+        }
+
+        DB::transaction(function () use ($request, $voucher, $data) {
+            $this->saveAttachmentsFromRequest($request, $voucher);
+            VoucherService::recordPayment($voucher, $data);
+        });
 
         return redirect()->back()
             ->with('success', "Payment of ₱" . number_format((float) $data['amount'], 2) . " recorded for {$voucher->voucher_no}. Source account was deducted.");
@@ -653,10 +692,16 @@ class VoucherController extends Controller
     private function submitEditRequest(Request $request, Voucher $voucher, array $data, array $entryRows): RedirectResponse
     {
         if ($voucher->pendingRequest()) {
+            $this->stagePendingAttachments($request);
             return redirect()->back()->withInput()->withErrors(['reason' => 'A request is already pending review for this voucher.']);
         }
 
-        $request->validate(['reason' => ['required', 'string', 'max:1000']]);
+        try {
+            $request->validate(['reason' => ['required', 'string', 'max:1000']]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            $this->stagePendingAttachments($request);
+            throw $e;
+        }
         unset($data['payment_status']);
 
         DB::transaction(function () use ($request, $voucher, $data, $entryRows) {
@@ -687,35 +732,124 @@ class VoucherController extends Controller
      */
     private function validateAttachments(Request $request, bool $required = false): void
     {
+        $hasKept = ! empty($request->input('kept_attachment_tokens', []));
+
         $request->validate([
-            'attachments'   => [$required ? 'required' : 'nullable', 'array'],
+            'attachments'   => [($required && ! $hasKept) ? 'required' : 'nullable', 'array'],
             'attachments.*' => ['file', 'mimes:pdf,jpg,jpeg,png,webp,doc,docx,xls,xlsx', 'max:10240'],
         ], [
             'attachments.required' => 'Attach at least one supporting document (invoice, receipt, etc.) before saving this voucher.',
         ]);
     }
 
-    private function saveAttachmentsFromRequest(Request $request, Voucher $voucher): void
+    /**
+     * A browser can never re-populate a file input after a validation error
+     * on some other field, so any file the user already picked would
+     * otherwise vanish on redisplay. We opportunistically stash valid
+     * uploads to a pending area and hand back an encrypted token the form
+     * can carry across the retry — see resolvePendingAttachments() and the
+     * `kept_attachment_tokens` handling in saveAttachmentsFromRequest().
+     */
+    private function stagePendingAttachments(Request $request): void
     {
         if (! $request->hasFile('attachments')) {
             return;
         }
 
+        $tokens = $request->input('kept_attachment_tokens', []);
+        $allowedMimes = ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx', 'xls', 'xlsx'];
+
         foreach ($request->file('attachments') as $file) {
-            if (! $file || ! $file->isValid()) {
+            if (! $file || ! $file->isValid() || $file->getSize() > 10240 * 1024) {
+                continue;
+            }
+            if (! in_array(strtolower($file->getClientOriginalExtension()), $allowedMimes, true)) {
                 continue;
             }
 
-            $path = $file->store('vouchers/' . $voucher->id, 'local');
+            $path = $file->store('attachments/pending', 'local');
 
-            $voucher->attachments()->create([
-                'uploaded_by'   => $request->user()?->id,
-                'original_name' => $file->getClientOriginalName(),
-                'path'          => $path,
-                'mime_type'     => $file->getClientMimeType(),
-                'size'          => $file->getSize(),
-            ]);
+            $tokens[] = \Illuminate\Support\Facades\Crypt::encryptString(json_encode([
+                'path' => $path,
+                'name' => $file->getClientOriginalName(),
+                'mime' => $file->getClientMimeType(),
+                'size' => $file->getSize(),
+            ]));
         }
+
+        $request->merge(['kept_attachment_tokens' => $tokens]);
+    }
+
+    /**
+     * Decrypts the `kept_attachment_tokens` carried over from a failed
+     * submission so the create/edit form can show "already attached" chips
+     * instead of an empty file input.
+     *
+     * @return list<array{token: string, name: string, size: int}>
+     */
+    private function resolvePendingAttachments(): array
+    {
+        return collect(old('kept_attachment_tokens', []))
+            ->map(function ($token) {
+                try {
+                    $meta = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($token), true);
+                } catch (\Throwable $e) {
+                    return null;
+                }
+                return $meta ? ['token' => $token, 'name' => $meta['name'], 'size' => $meta['size']] : null;
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function saveAttachmentsFromRequest(Request $request, Voucher $voucher): void
+    {
+        if ($request->hasFile('attachments')) {
+            foreach ($request->file('attachments') as $file) {
+                if (! $file || ! $file->isValid()) {
+                    continue;
+                }
+
+                $path = $file->store('vouchers/' . $voucher->id, 'local');
+
+                $voucher->attachments()->create([
+                    'uploaded_by'   => $request->user()?->id,
+                    'original_name' => $file->getClientOriginalName(),
+                    'path'          => $path,
+                    'mime_type'     => $file->getClientMimeType(),
+                    'size'          => $file->getSize(),
+                ]);
+            }
+        }
+
+        foreach ($request->input('kept_attachment_tokens', []) as $token) {
+            $this->attachFromPendingToken($voucher, $token, $request);
+        }
+    }
+
+    private function attachFromPendingToken(Voucher $voucher, string $token, Request $request): void
+    {
+        try {
+            $meta = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($token), true);
+        } catch (\Throwable $e) {
+            return;
+        }
+
+        if (! $meta || ! Storage::disk('local')->exists($meta['path'] ?? '')) {
+            return;
+        }
+
+        $newPath = 'vouchers/' . $voucher->id . '/' . basename($meta['path']);
+        Storage::disk('local')->move($meta['path'], $newPath);
+
+        $voucher->attachments()->create([
+            'uploaded_by'   => $request->user()?->id,
+            'original_name' => $meta['name'],
+            'path'          => $newPath,
+            'mime_type'     => $meta['mime'],
+            'size'          => $meta['size'],
+        ]);
     }
 
     private function projectsForPicker()

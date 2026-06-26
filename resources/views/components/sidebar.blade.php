@@ -32,6 +32,7 @@
                 ['name' => 'Daily Transactions', 'route' => 'vouchers.index', 'icon' => 'receipt', 'pattern' => 'vouchers.index'],
                 ['name' => 'Payables',  'route' => 'vouchers.payables', 'icon' => 'alarm-clock', 'pattern' => 'vouchers.payables'],
                 ['name' => 'Voucher Approvals', 'route' => 'voucher-requests.index', 'icon' => 'git-pull-request', 'pattern' => 'voucher-requests.*', 'cfoAdminOnly' => true],
+                ['name' => 'Payment Verification', 'route' => 'voucher-requests.index', 'params' => ['type' => 'payment'], 'icon' => 'banknote', 'pattern' => 'voucher-requests.*', 'cfoAdminOnly' => true],
             ],
         ],
         [
@@ -49,10 +50,24 @@
 
     $isLinkActive = function (array $link) use ($currentProjectKind): bool {
         $patterns = isset($link['pattern']) ? explode('|', $link['pattern']) : [$link['route']];
+        $routeMatches = false;
         foreach ($patterns as $p) {
             if (request()->routeIs($p)) {
-                return true;
+                $routeMatches = true;
+                break;
             }
+        }
+        if ($routeMatches) {
+            // Voucher Approvals and Payment Verification share one route,
+            // distinguished only by the `type` query param — make sure only
+            // the matching sidebar entry lights up.
+            if (isset($link['params']['type'])) {
+                return request()->query('type') === $link['params']['type'];
+            }
+            if ($link['route'] === 'voucher-requests.index') {
+                return request()->query('type') !== 'payment';
+            }
+            return true;
         }
         if (isset($link['showKind']) && request()->routeIs('projects.show*') && $currentProjectKind === $link['showKind']) {
             return true;
@@ -94,9 +109,18 @@
         unset($section);
     }
 
-    $pendingApprovalCount = ($user->isAdmin() || $user->isCfo())
-        ? \App\Models\VoucherRequest::where('status', 'pending')->count()
-        : 0;
+    $pendingCounts = [];
+    if ($user->isAdmin() || $user->isCfo()) {
+        $pendingCounts['voucher-requests.index'] = \App\Models\VoucherRequest::where('status', 'pending')
+            ->where('type', '!=', \App\Models\VoucherRequest::TYPE_PAYMENT)->count();
+        $pendingCounts['voucher-requests.index:payment'] = \App\Models\VoucherRequest::where('status', 'pending')
+            ->where('type', \App\Models\VoucherRequest::TYPE_PAYMENT)->count();
+    }
+
+    $badgeCountFor = function (array $link) use ($pendingCounts): int {
+        $key = $link['route'] . (isset($link['params']['type']) ? ':' . $link['params']['type'] : '');
+        return $pendingCounts[$key] ?? 0;
+    };
 @endphp
 
 <aside
@@ -164,7 +188,7 @@
                     <div class="space-y-0.5" :class="{ 'hidden': !open }">
                         @foreach ($section['links'] as $link)
                             @php $active = $isLinkActive($link); @endphp
-                            <a href="{{ route($link['route']) }}"
+                            <a href="{{ route($link['route'], $link['params'] ?? []) }}"
                                 @class([
                                     'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition',
                                     'bg-white/[0.06] text-white' => $active,
@@ -195,8 +219,8 @@
 
                 <div class="space-y-0.5">
                     @foreach ($section['links'] as $link)
-                        @php $active = $isLinkActive($link); @endphp
-                        <a href="{{ route($link['route']) }}"
+                        @php $active = $isLinkActive($link); $badgeCount = $badgeCountFor($link); @endphp
+                        <a href="{{ route($link['route'], $link['params'] ?? []) }}"
                             @class([
                                 'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] font-medium transition',
                                 'bg-white/[0.06] text-white' => $active,
@@ -212,8 +236,8 @@
                                     'text-slate-400 group-hover:text-slate-200' => ! $active,
                                 ])></i>
                             <span class="truncate">{{ $link['name'] }}</span>
-                            @if (! empty($link['cfoAdminOnly']) && $pendingApprovalCount > 0)
-                                <span class="ml-auto flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">{{ $pendingApprovalCount }}</span>
+                            @if (! empty($link['cfoAdminOnly']) && $badgeCount > 0)
+                                <span class="ml-auto flex h-5 min-w-[1.25rem] shrink-0 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-white">{{ $badgeCount }}</span>
                             @endif
                         </a>
                     @endforeach
