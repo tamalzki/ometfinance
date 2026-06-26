@@ -13,7 +13,7 @@
                 <i data-lucide="arrow-left-right" class="h-2.5 w-2.5"></i> transfer
             </a>
         @elseif ($e->isFromVoucher())
-            <a href="{{ route('vouchers.index', ['project_id' => $e->project_id]) }}"
+            <a href="{{ $e->voucher ? route('vouchers.show', $e->voucher) : route('vouchers.index', ['project_id' => $e->project_id]) }}"
                class="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-omet-blue hover:bg-blue-200"
                title="Posted by voucher {{ $e->voucher->voucher_no ?? '' }}">
                 <i data-lucide="receipt" class="h-2.5 w-2.5"></i> {{ $e->voucher->voucher_no ?? 'voucher' }}

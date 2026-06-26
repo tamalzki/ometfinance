@@ -53,7 +53,7 @@
             </span>
         @endif
         @if ($isFromVoucher)
-            <a href="{{ route('vouchers.index', ['project_id' => $c->project_id]) }}"
+            <a href="{{ $c->voucher ? route('vouchers.show', $c->voucher) : route('vouchers.index', ['project_id' => $c->project_id]) }}"
                class="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-omet-blue hover:bg-blue-200"
                title="Posted by voucher {{ $c->voucher->voucher_no ?? '' }}">
                 <i data-lucide="receipt" class="h-2.5 w-2.5"></i> {{ $c->voucher->voucher_no ?? 'voucher' }}
