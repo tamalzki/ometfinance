@@ -66,23 +66,24 @@
     @endforeach
 </div>
 
-{{-- ── Filter tabs ──────────────────────────────────────────────────────── --}}
-<nav class="flex shrink-0 overflow-x-auto border-b border-gray-200">
+{{-- ── Filter tabs (segmented control) ─────────────────────────────────── --}}
+<nav class="flex shrink-0 flex-wrap items-center gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">
     @foreach ($tabs as $key => $label)
     <a href="{{ route('voucher-requests.index', $key ? ['type' => $key] : []) }}"
         @class([
-            '-mb-px flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm transition-colors duration-150',
-            'border-b-2 border-omet-blue text-omet-blue font-semibold' => $activeStatus === 'pending' && ($activeType ?? '') === $key,
-            'border-b-2 border-transparent text-gray-500 hover:text-omet-navy hover:border-gray-300' => ! ($activeStatus === 'pending' && ($activeType ?? '') === $key),
+            'whitespace-nowrap rounded-md px-3 py-1.5 text-[12.5px] font-semibold transition-colors duration-150',
+            'bg-white text-omet-blue shadow-sm' => $activeStatus === 'pending' && ($activeType ?? '') === $key,
+            'text-slate-500 hover:text-omet-navy' => ! ($activeStatus === 'pending' && ($activeType ?? '') === $key),
         ])>
         {{ $label }}
     </a>
     @endforeach
+    <span class="mx-1 h-5 w-px shrink-0 bg-slate-200"></span>
     <a href="{{ route('voucher-requests.index', ['status' => 'approved']) }}"
         @class([
-            '-mb-px ml-auto flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm transition-colors duration-150',
-            'border-b-2 border-emerald-500 text-emerald-600 font-semibold' => $activeStatus === 'approved',
-            'border-b-2 border-transparent text-gray-500 hover:text-omet-navy hover:border-gray-300' => $activeStatus !== 'approved',
+            'flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1.5 text-[12.5px] font-semibold transition-colors duration-150',
+            'bg-white text-emerald-600 shadow-sm' => $activeStatus === 'approved',
+            'text-slate-500 hover:text-omet-navy' => $activeStatus !== 'approved',
         ])>
         <i data-lucide="check-circle-2" class="h-3.5 w-3.5"></i> Approved
     </a>

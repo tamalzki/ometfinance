@@ -78,6 +78,7 @@
         ]
         : [
             ['label' => 'Overview', 'icon' => 'layout-dashboard',  'route' => 'projects.show.overview'],
+            ['label' => 'Summary',  'icon' => 'bar-chart-2',       'route' => 'projects.show.summary'],
             ['label' => 'Funding',  'icon' => 'banknote',          'route' => 'projects.show.inflow'],
             ['label' => 'Outflow',  'icon' => 'arrow-up-circle',   'route' => 'projects.show.outflow'],
             ['label' => 'Ledger',   'icon' => 'book-open',         'route' => 'projects.show.history'],

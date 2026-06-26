@@ -210,6 +210,37 @@ class ProjectController extends Controller
         return view('projects.external.allocation', $data);
     }
 
+    public function showSummary(Project $project)
+    {
+        if ($project->isExternal()) {
+            return redirect()->route('projects.show.overview', $project);
+        }
+
+        $data = $this->loadProjectData($project);
+
+        $categorySummary = \App\Models\ProjectCategory::whereNull('parent_id')->orderBy('name')->get()
+            ->map(function ($parent) use ($project) {
+                $amount = $project->expenses
+                    ->filter(fn ($e) => $e->categoryRef && ($e->categoryRef->id === $parent->id || $e->categoryRef->parent_id === $parent->id))
+                    ->sum(fn ($e) => (float) $e->amount);
+
+                return ['id' => $parent->id, 'label' => $parent->name, 'amount' => (float) $amount];
+            });
+
+        $uncategorized = (float) $project->expenses
+            ->filter(fn ($e) => ! $e->categoryRef)
+            ->sum(fn ($e) => (float) $e->amount);
+
+        if ($uncategorized > 0) {
+            $categorySummary->push(['id' => null, 'label' => 'Uncategorized', 'amount' => $uncategorized]);
+        }
+
+        $data['categorySummary'] = $categorySummary->values();
+        $data['totalCost'] = $project->totalExpenses();
+
+        return view('projects.in_house.summary', $data);
+    }
+
     public function showInflow(Project $project): View
     {
         $template = $project->isExternal() ? 'projects.external.inflow' : 'projects.in_house.funding';

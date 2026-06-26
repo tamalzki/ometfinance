@@ -199,6 +199,9 @@
                             <th class="hidden border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 sm:table-cell">Progress</th>
                             <th class="hidden border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:table-cell">{{ $isExternal ? 'Contract value' : 'Budget' }}</th>
                             <th class="hidden border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:table-cell">{{ $isExternal ? 'Collected' : 'Spent' }}</th>
+                            @if ($isExternal)
+                            <th class="hidden border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 md:table-cell">Running Cost</th>
+                            @endif
                             <th class="hidden border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-slate-500 lg:table-cell">{{ $isExternal ? 'Outstanding' : 'Remaining / Net' }}</th>
                             <th class="hidden border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 xl:table-cell">Due date</th>
                             <th class="border-b border-slate-200 bg-slate-50 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">Status</th>
@@ -336,6 +339,13 @@
                             <td class="hidden px-4 py-3 text-right tabular-nums md:table-cell">
                                 <span class="font-medium {{ $primaryAmtClass }}" title="{{ $fmt($primaryAmt) }}">{{ $fmt($primaryAmt) }}</span>
                             </td>
+
+                            @if ($isExternal)
+                            {{-- Running cost (total outflow to date) --}}
+                            <td class="hidden px-4 py-3 text-right tabular-nums md:table-cell">
+                                <span class="font-medium {{ $outflow > 0 ? 'text-red-600' : 'text-gray-400' }}" title="{{ $fmt($outflow) }}">{{ $fmt($outflow) }}</span>
+                            </td>
+                            @endif
 
                             {{-- Outstanding / Remaining / Net cash --}}
                             <td class="hidden px-4 py-3 text-right tabular-nums lg:table-cell">

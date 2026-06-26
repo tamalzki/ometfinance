@@ -63,6 +63,7 @@ Route::middleware(['auth'])->group(function () {
         // External-project sub-pages
         Route::get('/{project}/overview',                           [ProjectController::class, 'showOverview'])->name('show.overview');
         Route::get('/{project}/allocation',                         [ProjectController::class, 'showAllocation'])->name('show.allocation');
+        Route::get('/{project}/summary',                            [ProjectController::class, 'showSummary'])->name('show.summary');
         Route::get('/{project}/inflow',                             [ProjectController::class, 'showInflow'])->name('show.inflow');
         Route::get('/{project}/outflow',                            [ProjectController::class, 'showOutflow'])->name('show.outflow');
         Route::get('/{project}/history',                            [ProjectController::class, 'showHistory'])->name('show.history');
