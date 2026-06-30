@@ -9,9 +9,12 @@
 
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <script src="https://unpkg.com/lucide@latest"></script>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+        @if (request()->routeIs('dashboard'))
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" defer></script>
+        @endif
+        <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" defer></script>
 
         @include('partials.mix-stylesheet')
         <script src="{{ mix('js/app.js') }}" defer></script>
@@ -23,7 +26,6 @@
     <body class="font-sans antialiased text-slate-700" x-data="{ sidebarOpen: false }">
         <div class="h-screen overflow-hidden bg-slate-50 lg:flex">
             <x-sidebar />
-            <script>if (typeof lucide !== 'undefined') { lucide.createIcons(); }</script>
 
             <div class="flex h-screen min-h-0 min-w-0 flex-1 flex-col lg:ml-64">
                 <x-header :title="$pageTitle ?? 'Dashboard'" />
@@ -41,9 +43,5 @@
                 style="display: none;"
             ></div>
         </div>
-
-        <script>
-            lucide.createIcons();
-        </script>
     </body>
 </html>

@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Models\ProjectAllocationLine;
 use App\Models\ProjectCollection;
 use App\Models\ProjectExpense;
+use App\Models\LedgerEntry;
 use App\Models\Transfer;
 use App\Models\Voucher;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -35,16 +36,31 @@ class ReportController extends Controller
 
     public function index(): View
     {
-        $accounts = BankAccount::with('ledgerEntries', 'entity')->get();
-        $projects = Project::with('collections', 'expenses')->get();
-        $transfers = Transfer::all();
+        $accounts = BankAccount::with('entity')->get();
+        $accountIds = $accounts->pluck('id');
+
+        $ledgerByAccount = LedgerEntry::whereIn('bank_account_id', $accountIds)
+            ->orderBy('date')
+            ->orderBy('id')
+            ->get(['bank_account_id', 'amount_in', 'amount_out'])
+            ->groupBy('bank_account_id');
+
+        foreach ($accounts as $account) {
+            $account->setRelation('ledgerEntries', $ledgerByAccount->get($account->id) ?? collect());
+        }
 
         // Encrypted column — aggregation handled in PHP.
-        $totalCashInBank      = (float) $accounts->sum(fn ($a) => $a->currentBalance());
-        $totalProjectExpenses = (float) $projects->sum(fn ($p) => $p->totalExpenses());
-        $totalCollections     = (float) $projects->sum(fn ($p) => $p->totalCollected());
-        $totalTransferred     = (float) $transfers->sum(fn ($t) => (float) $t->amount);
-        $netCashPosition      = $totalCashInBank;
+        $totalCashInBank = (float) $accounts->sum(fn ($a) => $a->currentBalance());
+
+        $projectIds = Project::pluck('id');
+        $totalProjectExpenses = (float) ProjectExpense::whereIn('project_id', $projectIds)
+            ->get(['amount'])
+            ->sum(fn ($e) => (float) $e->amount);
+        $totalCollections = (float) ProjectCollection::whereIn('project_id', $projectIds)
+            ->get(['amount'])
+            ->sum(fn ($c) => (float) $c->amount);
+        $totalTransferred = (float) Transfer::query()->get(['amount'])->sum(fn ($t) => (float) $t->amount);
+        $netCashPosition = $totalCashInBank;
 
         return view('reports.index', [
             'activeTab'            => 'overall',
@@ -55,8 +71,8 @@ class ReportController extends Controller
                 'transfers_made'    => $totalTransferred,
                 'net_position'      => $netCashPosition,
                 'accounts_count'    => $accounts->count(),
-                'projects_count'    => $projects->count(),
-                'transfers_count'   => $transfers->count(),
+                'projects_count'    => $projectIds->count(),
+                'transfers_count'   => Transfer::count(),
                 'generated_at'      => now(),
             ],
             'filters'              => $this->emptyFilters(),
@@ -72,7 +88,8 @@ class ReportController extends Controller
 
     public function cashOutflow(Request $request): View
     {
-        $filters = $this->parseFilters($request);
+        $filters = $this->parseFilters($request, defaultDateRange: true);
+        $paginate = ! $request->boolean('_full');
 
         $query = ProjectExpense::with(['project', 'bankAccount.entity', 'categoryRef.parent'])
             ->whereHas('project');
@@ -95,10 +112,18 @@ class ReportController extends Controller
             $query->where('category_id', $filters['category_id']);
         }
 
-        $expenses = $query->orderBy('spent_on')->get();
+        $allExpenses = (clone $query)->orderBy('spent_on')->get();
+        $grandTotal = (float) $allExpenses->sum(fn ($e) => (float) $e->amount);
+        $rowCount = $allExpenses->count();
+
+        $expenses = $paginate
+            ? (clone $query)->orderBy('spent_on')->paginate(50)->withQueryString()
+            : $allExpenses;
+
+        $pageExpenses = $paginate ? $expenses->getCollection() : $expenses;
 
         // Encrypted column — group + subtotal in PHP.
-        $groups = $expenses->groupBy(fn ($e) => $e->project_id)
+        $groups = $pageExpenses->groupBy(fn ($e) => $e->project_id)
             ->map(function ($items) {
                 $project = $items->first()->project;
 
@@ -122,14 +147,13 @@ class ReportController extends Controller
             })
             ->values();
 
-        $grandTotal = (float) $expenses->sum(fn ($e) => (float) $e->amount);
-
         return view('reports.index', [
             'activeTab'         => 'cash-outflow',
             'cashOutflow'       => [
                 'groups'      => $groups,
                 'grand_total' => $grandTotal,
-                'row_count'   => $expenses->count(),
+                'row_count'   => $rowCount,
+                'paginator'   => $paginate ? $expenses : null,
             ],
             'filters'             => $filters,
             'entities'            => $this->allEntities(),
@@ -191,7 +215,8 @@ class ReportController extends Controller
 
     public function transfers(Request $request): View
     {
-        $filters = $this->parseFilters($request);
+        $filters = $this->parseFilters($request, defaultDateRange: true);
+        $paginate = ! $request->boolean('_full');
 
         $query = Transfer::with(['fromAccount.entity', 'toAccount.entity', 'fromProject', 'toProject']);
 
@@ -214,20 +239,23 @@ class ReportController extends Controller
             });
         }
 
-        $transfers = $query->orderBy('date')->orderBy('id')->get();
+        $allTransfers = (clone $query)->orderBy('date')->orderBy('id')->get();
+        $grandTotal = (float) $allTransfers->sum(fn ($t) => (float) $t->amount);
+        $rowCount = $allTransfers->count();
 
-        // Encrypted column — grand total in PHP.
-        $grandTotal = (float) $transfers->sum(fn ($t) => (float) $t->amount);
+        $transfers = $paginate
+            ? (clone $query)->orderBy('date')->orderBy('id')->paginate(50)->withQueryString()
+            : $allTransfers;
 
         // If an entity was selected we can compute meaningful "out / in"
         // subtotals; otherwise they're identical to the grand total.
         $entityOut = 0.0;
         $entityIn  = 0.0;
         if ($filters['entity']) {
-            $entityOut = (float) $transfers->filter(fn ($t) => optional($t->fromAccount?->entity)->slug === $filters['entity']
+            $entityOut = (float) $allTransfers->filter(fn ($t) => optional($t->fromAccount?->entity)->slug === $filters['entity']
                 || (string) optional($t->fromAccount?->entity)->id === (string) $filters['entity']
             )->sum(fn ($t) => (float) $t->amount);
-            $entityIn = (float) $transfers->filter(fn ($t) => optional($t->toAccount?->entity)->slug === $filters['entity']
+            $entityIn = (float) $allTransfers->filter(fn ($t) => optional($t->toAccount?->entity)->slug === $filters['entity']
                 || (string) optional($t->toAccount?->entity)->id === (string) $filters['entity']
             )->sum(fn ($t) => (float) $t->amount);
         }
@@ -239,7 +267,8 @@ class ReportController extends Controller
                 'grand_total' => $grandTotal,
                 'entity_out'  => $entityOut,
                 'entity_in'   => $entityIn,
-                'row_count'   => $transfers->count(),
+                'row_count'   => $rowCount,
+                'paginator'   => $paginate ? $transfers : null,
             ],
             'filters'           => $filters,
             'entities'          => $this->allEntities(),
@@ -254,7 +283,8 @@ class ReportController extends Controller
 
     public function collections(Request $request): View
     {
-        $filters = $this->parseFilters($request);
+        $filters = $this->parseFilters($request, defaultDateRange: true);
+        $paginate = ! $request->boolean('_full');
 
         $query = ProjectCollection::with(['project.allocationLines', 'bankAccount'])
             ->whereHas('project', fn ($q) => $q->where('kind', 'external'));
@@ -269,10 +299,18 @@ class ReportController extends Controller
             $query->where('project_id', $filters['project_id']);
         }
 
-        $collections = $query->orderBy('collected_on')->get();
+        $allCollections = (clone $query)->orderBy('collected_on')->get();
+        $grandTotal = (float) $allCollections->sum(fn ($c) => (float) $c->amount);
+        $rowCount = $allCollections->count();
+
+        $collections = $paginate
+            ? (clone $query)->orderBy('collected_on')->paginate(50)->withQueryString()
+            : $allCollections;
+
+        $pageCollections = $paginate ? $collections->getCollection() : $collections;
 
         // Encrypted columns — build report rows + subtotal per project in PHP.
-        $groups = $collections->groupBy('project_id')->map(function ($items) {
+        $groups = $pageCollections->groupBy('project_id')->map(function ($items) {
             $project = $items->first()->project;
             $allocations = $project->allocationLines
                 ->whereIn('row_kind', [
@@ -303,14 +341,13 @@ class ReportController extends Controller
             ];
         })->values();
 
-        $grandTotal = (float) $collections->sum(fn ($c) => (float) $c->amount);
-
         return view('reports.index', [
             'activeTab'         => 'collections',
             'collections'       => [
                 'groups'      => $groups,
                 'grand_total' => $grandTotal,
-                'row_count'   => $collections->count(),
+                'row_count'   => $rowCount,
+                'paginator'   => $paginate ? $collections : null,
             ],
             'filters'           => $filters,
             'entities'          => $this->allEntities(),
@@ -325,7 +362,8 @@ class ReportController extends Controller
 
     public function payables(Request $request): View
     {
-        $filters = $this->parseFilters($request);
+        $filters = $this->parseFilters($request, defaultDateRange: true);
+        $paginate = ! $request->boolean('_full');
 
         $query = Voucher::with(['project', 'sourceBankAccount.entity', 'payments'])
             ->whereIn('status', ['unpaid', 'partial', 'pdc'])
@@ -341,12 +379,20 @@ class ReportController extends Controller
             $query->where('project_id', $filters['project_id']);
         }
 
-        $open = $query->orderBy('due_date')->orderByDesc('voucher_date')->get();
+        $allOpen = (clone $query)->orderBy('due_date')->orderByDesc('voucher_date')->get();
+        $grandTotal = (float) $allOpen->sum(fn ($v) => $v->balanceDue());
+        $rowCount = $allOpen->count();
+
+        $open = $paginate
+            ? (clone $query)->orderBy('due_date')->orderByDesc('voucher_date')->paginate(50)->withQueryString()
+            : $allOpen;
+
+        $pageOpen = $paginate ? $open->getCollection() : $open;
 
         // Encrypted amounts — group by aging bucket in PHP.
         $labels = VoucherController::AGING_LABELS;
-        $groups = collect($labels)->map(function ($label, $key) use ($open) {
-            $items = $open->filter(fn ($v) => $v->agingBucket() === $key)->values();
+        $groups = collect($labels)->map(function ($label, $key) use ($pageOpen) {
+            $items = $pageOpen->filter(fn ($v) => $v->agingBucket() === $key)->values();
             return (object) [
                 'key'      => $key,
                 'label'    => $label,
@@ -355,14 +401,13 @@ class ReportController extends Controller
             ];
         })->filter(fn ($g) => $g->items->isNotEmpty())->values();
 
-        $grandTotal = (float) $open->sum(fn ($v) => $v->balanceDue());
-
         return view('reports.index', [
             'activeTab'         => 'payables',
             'payables'          => [
                 'groups'      => $groups,
                 'grand_total' => $grandTotal,
-                'row_count'   => $open->count(),
+                'row_count'   => $rowCount,
+                'paginator'   => $paginate ? $open : null,
             ],
             'filters'           => $filters,
             'entities'          => $this->allEntities(),
@@ -382,7 +427,8 @@ class ReportController extends Controller
 
     public function vouchers(Request $request): View
     {
-        $filters = $this->parseFilters($request);
+        $filters = $this->parseFilters($request, defaultDateRange: true);
+        $paginate = ! $request->boolean('_full');
 
         $query = Voucher::with(['project', 'sourceBankAccount.entity', 'payments']);
 
@@ -411,12 +457,15 @@ class ReportController extends Controller
             $query->where('transaction_type', $filters['transaction_type']);
         }
 
-        $vouchers = $query->orderBy('voucher_date')->orderBy('id')->get();
+        $allVouchers = (clone $query)->orderBy('voucher_date')->orderBy('id')->get();
+        $grandPayable = (float) $allVouchers->sum(fn ($v) => (float) $v->amount_payable);
+        $grandPaid    = (float) $allVouchers->sum(fn ($v) => $v->amountPaid());
+        $grandBalance = (float) $allVouchers->sum(fn ($v) => $v->balanceDue());
+        $rowCount     = $allVouchers->count();
 
-        // Encrypted columns — aggregates computed in PHP via model helpers.
-        $grandPayable = (float) $vouchers->sum(fn ($v) => (float) $v->amount_payable);
-        $grandPaid    = (float) $vouchers->sum(fn ($v) => $v->amountPaid());
-        $grandBalance = (float) $vouchers->sum(fn ($v) => $v->balanceDue());
+        $vouchers = $paginate
+            ? (clone $query)->orderBy('voucher_date')->orderBy('id')->paginate(50)->withQueryString()
+            : $allVouchers;
 
         return view('reports.index', [
             'activeTab'         => 'vouchers',
@@ -425,7 +474,8 @@ class ReportController extends Controller
                 'grand_payable' => $grandPayable,
                 'grand_paid'    => $grandPaid,
                 'grand_balance' => $grandBalance,
-                'row_count'     => $vouchers->count(),
+                'row_count'     => $rowCount,
+                'paginator'     => $paginate ? $vouchers : null,
             ],
             'filters'            => $filters,
             'entities'           => $this->allEntities(),
@@ -479,9 +529,9 @@ class ReportController extends Controller
      *  Helpers — shared between report methods + exports
      * ═════════════════════════════════════════════════════════════════ */
 
-    private function parseFilters(Request $request): array
+    private function parseFilters(Request $request, bool $defaultDateRange = false): array
     {
-        return [
+        $filters = [
             'date_from'        => $request->filled('date_from') ? Carbon::parse($request->input('date_from'))->toDateString() : null,
             'date_to'          => $request->filled('date_to')   ? Carbon::parse($request->input('date_to'))->toDateString()   : null,
             'project_id'       => $request->input('project_id') ?: null,
@@ -492,6 +542,13 @@ class ReportController extends Controller
             'status'           => $request->input('status') ?: null,
             'transaction_type' => $request->input('transaction_type') ?: null,
         ];
+
+        if ($defaultDateRange && ! $filters['date_from'] && ! $filters['date_to']) {
+            $filters['date_from'] = now()->subDays(90)->toDateString();
+            $filters['date_to']   = now()->toDateString();
+        }
+
+        return $filters;
     }
 
     private function emptyFilters(): array
@@ -535,11 +592,12 @@ class ReportController extends Controller
     private function buildExportPayload(string $report, Request $request): array
     {
         $filters = $this->parseFilters($request);
+        $exportFilters = array_merge($filters, ['_full' => true]);
         $range   = $this->formatRange($filters);
 
         switch ($report) {
             case 'cash-outflow':
-                $req = new Request($filters);
+                $req = new Request($exportFilters);
                 $data = $this->cashOutflow($req)->getData();
                 $rows = [];
                 foreach ($data['cashOutflow']['groups'] as $g) {
@@ -566,7 +624,7 @@ class ReportController extends Controller
                 ];
 
             case 'account-balances':
-                $req = new Request($filters);
+                $req = new Request($exportFilters);
                 $data = $this->accountBalances($req)->getData();
                 $rows = [];
                 foreach ($data['accountBalances']['groups'] as $g) {
@@ -592,7 +650,7 @@ class ReportController extends Controller
                 ];
 
             case 'transfers':
-                $req = new Request($filters);
+                $req = new Request($exportFilters);
                 $data = $this->transfers($req)->getData();
                 $rows = [];
                 foreach ($data['transfers']['rows'] as $t) {
@@ -617,7 +675,7 @@ class ReportController extends Controller
                 ];
 
             case 'collections':
-                $req = new Request($filters);
+                $req = new Request($exportFilters);
                 $data = $this->collections($req)->getData();
                 $rows = [];
                 foreach ($data['collections']['groups'] as $g) {
@@ -645,7 +703,7 @@ class ReportController extends Controller
                 ];
 
             case 'payables':
-                $req = new Request($filters);
+                $req = new Request($exportFilters);
                 $data = $this->payables($req)->getData();
                 $rows = [];
                 foreach ($data['payables']['groups'] as $g) {
@@ -673,7 +731,7 @@ class ReportController extends Controller
                 ];
 
             case 'vouchers':
-                $req = new Request($filters);
+                $req = new Request($exportFilters);
                 $data = $this->vouchers($req)->getData();
                 $rows = [];
                 foreach ($data['vouchersReport']['rows'] as $v) {

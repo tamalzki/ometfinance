@@ -20,7 +20,7 @@
     $activeStatus = $activeStatus ?? 'pending';
 @endphp
 
-<div class="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">
+<div class="disburse-page">
 
 @if (session('success'))
     <div class="flex shrink-0 items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-800">
@@ -29,7 +29,7 @@
     </div>
 @endif
 
-<div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
+<div class="disburse-page-header">
     <div class="min-w-0">
         <h1 class="text-xl font-bold tracking-tight text-omet-navy">Voucher Approvals</h1>
         <p class="text-xs text-slate-500">
@@ -38,8 +38,8 @@
     </div>
 </div>
 
-{{-- ── Summary cards — 3 inline ───────────────────────────────────────── --}}
-<div class="flex shrink-0 flex-row flex-nowrap gap-2.5 overflow-x-auto">
+{{-- ── Summary cards — inline grid on mobile ────────────────────────────── --}}
+<div class="disburse-kpi-inline">
     @foreach ([
         ['key' => 'create',  'label' => 'For Approval', 'icon' => 'file-plus', 'tone' => 'amber'],
         ['key' => 'edit',    'label' => 'Edit Request', 'icon' => 'pencil',    'tone' => 'violet'],
@@ -56,7 +56,7 @@
         ][$card['tone']];
     @endphp
     <a href="{{ route('voucher-requests.index', ['type' => $card['key']]) }}"
-        class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border bg-white px-3 py-2 shadow-sm transition hover:shadow-md {{ $active ? $tone['active'] : 'border-gray-100' }}">
+        class="flex min-w-0 items-center gap-2 rounded-lg border bg-white px-3 py-2 shadow-sm transition hover:shadow-md {{ $active ? $tone['active'] : 'border-gray-100' }}">
         <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md {{ $tone['icon'] }}">
             <i data-lucide="{{ $card['icon'] }}" class="h-3.5 w-3.5"></i>
         </span>
@@ -67,7 +67,7 @@
 </div>
 
 {{-- ── Filter tabs (segmented control) ─────────────────────────────────── --}}
-<nav class="flex shrink-0 flex-wrap items-center gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1">
+<nav class="disburse-tab-nav">
     @foreach ($tabs as $key => $label)
     <a href="{{ route('voucher-requests.index', $key ? ['type' => $key] : []) }}"
         @class([
@@ -90,7 +90,7 @@
 </nav>
 
 {{-- ── Table ────────────────────────────────────────────────────────────── --}}
-<div class="data-grid min-h-0 min-w-0 flex-1 overflow-auto">
+<div class="disburse-data-grid">
     <table class="min-w-full">
         <thead class="sticky top-0 z-20">
             <tr>
@@ -142,6 +142,7 @@
             @endforelse
         </tbody>
     </table>
+    <x-pagination-simple :paginator="$requests" />
 </div>
 
 </div>

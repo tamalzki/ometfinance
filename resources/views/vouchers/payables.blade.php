@@ -17,8 +17,17 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('payablesPage', () => ({
         showPay: @json($errors->any() && ! $errors->has('cancel')),
         q: '',
+        rowSearchIndex: @json($rowSearchIndex),
         payVoucher: { id: null, no: '', payee: '', balance: 0 },
         p: { bank_account_id: '', paid_on: @json(now()->format('Y-m-d')), amount: '', mode: 'cash', check_no: '', check_date: '', notes: '' },
+        get needle() {
+            return (this.q || '').trim().toLowerCase();
+        },
+        rowVisible(id) {
+            if (! this.needle) return true;
+            const hay = this.rowSearchIndex[id];
+            return hay && hay.includes(this.needle);
+        },
         openPay(v) {
             this.payVoucher = { id: v.id, no: v.no, payee: v.payee, balance: v.balance };
             this.p = { bank_account_id: v.account ? String(v.account) : '', paid_on: @json(now()->format('Y-m-d')),
@@ -30,7 +39,7 @@ document.addEventListener('alpine:init', () => {
 });
 </script>
 
-<div x-data="payablesPage" class="flex min-h-0 flex-1 flex-col gap-2">
+<div x-data="payablesPage" class="disburse-page">
 
 {{-- Flash / errors --}}
 @if (session('success'))
@@ -45,50 +54,47 @@ document.addEventListener('alpine:init', () => {
 @endif
 
 {{-- ── Top bar: title + KPIs + action ─────────────────────────────────────── --}}
-<div class="flex shrink-0 flex-wrap items-stretch justify-between gap-0 divide-x divide-slate-100 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+<div class="disburse-summary-strip">
     {{-- Title block --}}
-    <div class="flex flex-col justify-center px-4 py-3 min-w-[140px]">
+    <div class="disburse-summary-title flex flex-col justify-center">
         <p class="text-[13px] font-bold tracking-tight text-omet-navy">Payables</p>
         <p class="mt-0.5 text-[11px] text-slate-400">{{ $summary['count'] }} open {{ \Illuminate\Support\Str::plural('voucher', $summary['count']) }}</p>
     </div>
 
     {{-- Outstanding --}}
-    <div class="flex flex-col justify-center px-5 py-3">
+    <div class="flex flex-col justify-center">
         <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Outstanding</p>
         <p class="mt-1 text-base font-bold tabular-nums text-amber-700">{{ $peso($summary['outstanding']) }}</p>
     </div>
 
     {{-- Overdue --}}
-    <div class="flex flex-col justify-center px-5 py-3">
+    <div class="flex flex-col justify-center">
         <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Overdue</p>
         <p class="mt-1 text-base font-bold tabular-nums {{ $summary['overdue'] > 0 ? 'text-rose-600' : 'text-slate-300' }}">{{ $peso($summary['overdue']) }}</p>
     </div>
 
     {{-- Due in 7 days --}}
-    <div class="flex flex-col justify-center px-5 py-3">
+    <div class="flex flex-col justify-center">
         <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Due in 7 days</p>
         <p class="mt-1 text-base font-bold tabular-nums {{ $summary['due_7d'] > 0 ? 'text-orange-600' : 'text-slate-300' }}">{{ $peso($summary['due_7d']) }}</p>
     </div>
 
-    {{-- Spacer --}}
-    <div class="flex-1"></div>
-
-    {{-- Action button (no divider on right, flush end) --}}
-    <div class="flex items-center px-4 py-3">
+    {{-- Action --}}
+    <div class="disburse-summary-action">
         <a href="{{ route('vouchers.index') }}"
-           class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
+           class="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue sm:w-auto">
             <i data-lucide="receipt" class="h-3.5 w-3.5"></i> All vouchers
         </a>
     </div>
 </div>
 
 {{-- ── Toolbar: search + aging chip filters ────────────────────────────────── --}}
-<div class="flex shrink-0 flex-wrap items-center gap-2">
+<div class="flex shrink-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
     {{-- Search --}}
-    <div class="relative">
+    <div class="disburse-search">
         <i data-lucide="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"></i>
         <input type="search" x-model="q" autocomplete="off" placeholder="Search payee, voucher no., project…"
-               class="h-8 w-64 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-[12px] text-slate-700 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
+               class="h-8 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-[12px] text-slate-700 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
     </div>
 
     {{-- Divider --}}
@@ -128,7 +134,7 @@ document.addEventListener('alpine:init', () => {
 </div>
 
 {{-- ── Table — this is the main event ─────────────────────────────────────── --}}
-<div class="data-grid min-h-0 flex-1 overflow-auto">
+<div class="disburse-data-grid">
     <table class="min-w-full">
         <thead class="sticky top-0 z-20">
             <tr>
@@ -152,12 +158,11 @@ document.addEventListener('alpine:init', () => {
                     $bucket   = $v->agingBucket();
                     $cfg      = $bucketConfig[$bucket] ?? ['label' => '—', 'badge' => 'bg-slate-100 text-slate-600 ring-slate-200', 'text' => 'text-slate-600'];
                     $overdue  = in_array($bucket, ['d1_30', 'd31_60', 'd60_plus'], true);
-                    $haystack = strtolower(implode(' ', array_filter([$v->voucher_no, $v->payee_name, $v->project?->name, $v->typeLabel()])));
                     $payload  = ['id' => $v->id, 'no' => $v->voucher_no, 'payee' => $v->payee_name,
                                  'balance' => $balance, 'account' => $v->source_bank_account_id, 'mode' => $v->mode_of_payment];
                 @endphp
                 <tr class="group cursor-pointer transition-colors hover:bg-slate-50/60"
-                    x-show="q.trim() === '' || @js($haystack).includes(q.trim().toLowerCase())"
+                    x-show="rowVisible({{ $v->id }})"
                     @click="window.location = '{{ route('vouchers.show', $v->id) }}'">
 
                     {{-- Voucher no. --}}
@@ -255,6 +260,7 @@ document.addEventListener('alpine:init', () => {
         </tfoot>
         @endif
     </table>
+    <x-pagination-simple :paginator="$rows" />
 </div>
 
 @include('vouchers.partials.payment-modal')

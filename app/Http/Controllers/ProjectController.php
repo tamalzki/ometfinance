@@ -34,23 +34,39 @@ class ProjectController extends Controller
 
     private function kindIndex(string $kind): View
     {
-        $projects = Project::where('kind', $kind)
-            ->with([
-                'collections:id,project_id,amount,collected_on',
-                'expenses:id,project_id,amount,spent_on',
-            ])
-            ->latest()
-            ->get();
+        $projectIds = Project::where('kind', $kind)->pluck('id');
 
-        $activeProjects = $projects->whereNotIn('status', ['completed', 'cancelled']);
+        $collectionsByProject = ProjectCollection::whereIn('project_id', $projectIds)
+            ->get(['project_id', 'amount', 'collected_on'])
+            ->groupBy('project_id');
+
+        $expensesByProject = ProjectExpense::whereIn('project_id', $projectIds)
+            ->get(['project_id', 'amount', 'spent_on'])
+            ->groupBy('project_id');
+
+        $allProjects = Project::where('kind', $kind)->get(['id', 'contract_value', 'status']);
+
+        $projects = Project::where('kind', $kind)
+            ->latest()
+            ->paginate(50)->withQueryString();
+
+        foreach ($projects as $project) {
+            $project->setRelation('collections', $collectionsByProject->get($project->id) ?? collect());
+            $project->setRelation('expenses', $expensesByProject->get($project->id) ?? collect());
+        }
+
+        $activeProjects = $allProjects->whereNotIn('status', ['completed', 'cancelled']);
+
+        $totalCollected = (float) $collectionsByProject->flatten()->sum(fn ($c) => (float) $c->amount);
+        $totalOutflow = (float) $expensesByProject->flatten()->sum(fn ($e) => (float) $e->amount);
 
         $summary = [
             'active_count'     => $activeProjects->count(),
-            'total_count'      => $projects->count(),
-            'completed_count'  => $projects->where('status', 'completed')->count(),
+            'total_count'      => $allProjects->count(),
+            'completed_count'  => $allProjects->where('status', 'completed')->count(),
             'contract_value'   => (float) $activeProjects->sum('contract_value'),
-            'total_collected'  => (float) $projects->sum(fn ($p) => $p->collections->sum('amount')),
-            'total_outflow'    => (float) $projects->sum(fn ($p) => $p->expenses->sum('amount')),
+            'total_collected'  => $totalCollected,
+            'total_outflow'    => $totalOutflow,
         ];
         $summary['outstanding'] = max(0, $summary['contract_value'] - $summary['total_collected']);
         $summary['net_cash']    = $summary['total_collected'] - $summary['total_outflow'];
@@ -62,23 +78,27 @@ class ProjectController extends Controller
         if ($kind === 'in_house') {
             $threshold30d = now()->subDays(30);
 
-            $summary['over_budget'] = $projects->filter(function ($p) {
+            $summary['over_budget'] = $allProjects->filter(function ($p) use ($expensesByProject) {
                 $budget = (float) $p->contract_value;
-                $spent  = (float) $p->expenses->sum('amount');
+                $spent  = (float) ($expensesByProject->get($p->id)?->sum(fn ($e) => (float) $e->amount) ?? 0);
                 return $budget > 0 && $spent > $budget;
             })->count();
 
-            $summary['nearing_limit'] = $projects->filter(function ($p) {
+            $summary['nearing_limit'] = $allProjects->filter(function ($p) use ($expensesByProject) {
                 $budget = (float) $p->contract_value;
-                $spent  = (float) $p->expenses->sum('amount');
-                if ($budget <= 0) return false;
+                $spent  = (float) ($expensesByProject->get($p->id)?->sum(fn ($e) => (float) $e->amount) ?? 0);
+                if ($budget <= 0) {
+                    return false;
+                }
                 $pct = $spent / $budget;
                 return $pct >= 0.8 && $pct < 1.0;
             })->count();
 
-            $summary['active_recently'] = $projects->filter(function ($p) use ($threshold30d) {
-                $lastExpense = $p->expenses->max('spent_on');
-                $lastInflow  = $p->collections->max('collected_on');
+            $summary['active_recently'] = $allProjects->filter(function ($p) use ($threshold30d, $expensesByProject, $collectionsByProject) {
+                $expenses = $expensesByProject->get($p->id);
+                $collections = $collectionsByProject->get($p->id);
+                $lastExpense = $expenses?->max('spent_on');
+                $lastInflow  = $collections?->max('collected_on');
                 $last = collect([$lastExpense, $lastInflow])->filter()->max();
                 return $last && $last >= $threshold30d;
             })->count();

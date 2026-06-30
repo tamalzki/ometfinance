@@ -684,7 +684,7 @@
         top: 0;
         z-index: 20;
         background-color: rgb(252 253 254 / 0.92);
-        @apply backdrop-blur-md;
+        @apply backdrop-blur-sm;
         border-bottom-width: 1px;
         border-bottom-style: solid;
         border-bottom-color: rgb(235 239 243);
@@ -1247,5 +1247,129 @@
 
     .sidebar-nav-scroll::-webkit-scrollbar-thumb:hover {
         background: rgb(71 85 105);
+    }
+
+    /* ── Disbursements & list pages — mobile-responsive shell ─────────── */
+    .disburse-page {
+        @apply flex min-h-0 min-w-0 flex-1 flex-col gap-2.5;
+    }
+
+    .disburse-page-header {
+        @apply flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between;
+    }
+
+    .disburse-page-actions {
+        @apply flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-2;
+    }
+
+    .disburse-page-actions > a,
+    .disburse-page-actions > button {
+        @apply inline-flex w-full justify-center sm:w-auto;
+    }
+
+    .disburse-toolbar {
+        @apply flex shrink-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between;
+    }
+
+    .disburse-search {
+        @apply relative w-full min-w-0 sm:w-64;
+    }
+
+    .disburse-search input {
+        @apply w-full;
+    }
+
+    .disburse-filter-form {
+        @apply grid w-full grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-1.5;
+    }
+
+    .disburse-filter-form input[type="date"] {
+        @apply w-full min-w-0 sm:w-[140px];
+    }
+
+    .disburse-filter-form select {
+        @apply w-full min-w-0 sm:w-auto;
+    }
+
+    .disburse-kpi-grid {
+        @apply grid shrink-0 grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4;
+    }
+
+    .disburse-kpi-inline {
+        @apply grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5;
+    }
+
+    .disburse-kpi-inline > a {
+        @apply min-w-0;
+    }
+
+    .disburse-summary-strip {
+        @apply grid shrink-0 grid-cols-2 gap-2 lg:flex lg:items-stretch lg:gap-0 lg:overflow-hidden lg:rounded-xl lg:border lg:border-slate-200 lg:bg-white lg:shadow-sm lg:divide-x lg:divide-slate-100;
+    }
+
+    .disburse-summary-strip > * {
+        @apply rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm lg:rounded-none lg:border-0 lg:border-transparent lg:bg-transparent lg:shadow-none;
+    }
+
+    .disburse-summary-strip > .disburse-summary-title {
+        @apply col-span-2 lg:min-w-[140px];
+    }
+
+    .disburse-summary-strip > .disburse-summary-action {
+        @apply col-span-2 flex items-center lg:col-span-1 lg:flex-1 lg:justify-end;
+    }
+
+    .disburse-data-grid {
+        @apply data-grid -mx-1 min-h-0 min-w-0 flex-1 overflow-auto px-1 sm:mx-0 sm:px-0;
+    }
+
+    .disburse-tab-nav {
+        @apply flex shrink-0 flex-wrap items-center gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 sm:flex-nowrap;
+    }
+
+    .disburse-actions-row {
+        @apply flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-3;
+    }
+
+    .disburse-actions-row > form,
+    .disburse-actions-row > button {
+        @apply w-full sm:w-auto;
+    }
+
+    .disburse-actions-row > form button,
+    .disburse-actions-row > button {
+        @apply w-full justify-center sm:w-auto;
+    }
+
+    .reports-filter-form {
+        @apply grid grid-cols-1 gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-3 sm:grid-cols-2 sm:items-end lg:flex lg:flex-wrap lg:gap-3 lg:py-2.5;
+    }
+
+    .reports-filter-form > div {
+        @apply min-w-0 w-full sm:w-auto;
+    }
+
+    .reports-filter-form select,
+    .reports-filter-form input[type="date"] {
+        @apply w-full min-w-0;
+    }
+
+    .reports-export-row {
+        @apply flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between;
+    }
+
+    .reports-export-actions {
+        @apply grid w-full grid-cols-3 gap-1.5 sm:flex sm:w-auto sm:flex-wrap sm:justify-end;
+    }
+
+    .reports-export-actions form,
+    .reports-export-actions button,
+    .reports-export-actions a {
+        @apply min-w-0;
+    }
+
+    .reports-export-actions button,
+    .reports-export-actions a {
+        @apply w-full justify-center;
     }
 }

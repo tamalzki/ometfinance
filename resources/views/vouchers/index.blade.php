@@ -11,198 +11,28 @@
         'paid'      => 'bg-emerald-50 text-emerald-700 ring-emerald-100',
         'cancelled' => 'bg-rose-50 text-rose-600 ring-rose-100',
     ];
-
-    $accountsForPicker = $accounts->map(fn ($a) => [
-        'id'     => $a->id,
-        'label'  => ($a->entity?->name ? $a->entity->name . ' — ' : '') . $a->name,
-        'search' => strtolower(implode(' ', array_filter([
-            $a->entity?->name, $a->name, $a->bank_name, (string) ($a->account_number ?? ''),
-        ]))),
-    ])->values();
-
-    $projectsForPicker = $projects->map(fn ($p) => [
-        'id'     => $p->id,
-        'label'  => $p->name . ($p->code ? ' (' . $p->code . ')' : ''),
-        'kind'   => $p->kind === 'in_house' ? 'In-house' : 'External',
-        'search' => strtolower(implode(' ', array_filter([
-            $p->name, $p->code, $p->client_name, $p->kind === 'in_house' ? 'in-house' : 'external',
-        ]))),
-    ])->values();
-
-    $payeesForPicker = $payees->map(fn ($name) => [
-        'id'     => $name,
-        'label'  => $name,
-        'search' => strtolower($name),
-    ])->values();
-
-    $typesForPicker = collect($types)->map(fn ($label, $key) => [
-        'id'     => $key,
-        'label'  => $label,
-        'search' => strtolower($key . ' ' . $label),
-    ])->values();
-
-    $modesForPicker = collect($modes)->map(fn ($label, $key) => [
-        'id'     => $key,
-        'label'  => $label,
-        'search' => strtolower($key . ' ' . $label),
-    ])->values();
-
-    $formDefaults = [
-        'voucher_no'             => old('voucher_no', ''),
-        'voucher_date'           => old('voucher_date', now()->format('Y-m-d')),
-        'due_date'               => old('due_date', ''),
-        'release_date'           => old('release_date', ''),
-        'payee_name'             => old('payee_name', ''),
-        'source'                 => old('source', ''),
-        'project_id'             => old('project_id', $activeProject ? (string) $activeProject->id : ''),
-        'source_bank_account_id' => old('source_bank_account_id', ''),
-        'transaction_type'       => old('transaction_type', 'rfp'),
-        'po_number'              => old('po_number', ''),
-        'reference'              => old('reference', ''),
-        'amount_payable'         => old('amount_payable', ''),
-        'mode_of_payment'        => old('mode_of_payment', 'cash'),
-        'particular'             => old('particular', ''),
-        'remarks'                => old('remarks', ''),
-        'source_of_fund'         => old('source_of_fund', ''),
-        'or_ref'                 => old('or_ref', ''),
-        'change_amount'          => old('change_amount', ''),
-        'notes'                  => old('notes', ''),
-        'payment_status'         => old('payment_status', 'unpaid'),
-        'attachments'            => [],
-    ];
-
-    $oldPayee = $formDefaults['payee_name'];
-    $payeeOtherInitial = $oldPayee !== '' && ! $payees->contains($oldPayee);
-
-    $showFormInitial = $errors->any() && ! old('paying_voucher_id');
 @endphp
 
 <script>
 document.addEventListener('alpine:init', () => {
     Alpine.data('vouchersPage', () => ({
-        showForm: @json($showFormInitial),
-        showPay: false,
-        editId: @json(old('editing_voucher_id') ? (int) old('editing_voucher_id') : null),
-        lockedFields: false,
-        payVoucher: { id: null, no: '', payee: '', balance: 0 },
+        showPay: @json($errors->any() && old('paying_voucher_id')),
         q: '',
         activeProjectId: @json($activeProject?->id),
-
-        projects: @json($projectsForPicker),
-        accounts: @json($accountsForPicker),
-        types: @json($typesForPicker),
-        modes: @json($modesForPicker),
-        payees: @json($payeesForPicker),
-        categories: @json($categoriesForPicker),
-        statuses: @json($statuses),
-
-        projOpen: false, projQuery: '',
-        acctOpen: false, acctQuery: '',
-        typeOpen: false, typeQuery: '',
-        modeOpen: false, modeQuery: '',
-        payeeOpen: false, payeeQuery: '', payeeOther: @json($payeeOtherInitial),
-        categoryOpen: false, categoryQuery: '',
-
-        // header form model
-        f: @json($formDefaults),
-
-        // payment form model
+        rowSearchIndex: @json($rowSearchIndex),
+        payVoucher: { id: null, no: '', payee: '', balance: 0 },
         p: { bank_account_id: '', paid_on: @json(now()->format('Y-m-d')), amount: '', mode: 'cash', check_no: '', check_date: '', notes: '' },
 
-        closeFormCombos() {
-            this.projOpen = false;
-            this.acctOpen = false;
-            this.typeOpen = false;
-            this.modeOpen = false;
-            this.payeeOpen = false;
-            this.categoryOpen = false;
-            this.projQuery = '';
-            this.acctQuery = '';
-            this.typeQuery = '';
-            this.modeQuery = '';
-            this.payeeQuery = '';
-            this.categoryQuery = '';
+        get needle() {
+            return (this.q || '').trim().toLowerCase();
         },
-        filteredOptions(list, query) {
-            const needle = (query || '').trim().toLowerCase();
-            if (! needle) return list;
-            return list.filter(o => (o.search || o.label || '').toLowerCase().includes(needle));
+        rowVisible(id) {
+            if (! this.needle) return true;
+            const hay = this.rowSearchIndex[id];
+            return hay && hay.includes(this.needle);
         },
-        projectLabel(id) {
-            if (! id) return '— none —';
-            const p = this.projects.find(x => String(x.id) === String(id));
-            return p ? p.label : '— none —';
-        },
-        accountLabel(id) {
-            if (! id) return 'Pending — source not yet confirmed';
-            const a = this.accounts.find(x => String(x.id) === String(id));
-            return a ? a.label : 'Pending — source not yet confirmed';
-        },
-        typeLabel(id) {
-            const t = this.types.find(x => x.id === id);
-            return t ? t.label : '— select type —';
-        },
-        modeLabel(id) {
-            const m = this.modes.find(x => x.id === id);
-            return m ? m.label : '— select mode —';
-        },
-        categoryLabel(id) {
-            if (! id) return '— select category —';
-            const c = this.categories.find(x => String(x.id) === String(id));
-            return c ? c.label : '— select category —';
-        },
-        statusLabel(status) {
-            return this.statuses[status] || status;
-        },
-        get alreadyPaid() {
-            return this.f.payment_status === 'paid';
-        },
-        get isCancelled() {
-            return this.f.voucher_status === 'cancelled';
-        },
-        get hasPartialPayment() {
-            return ['partial', 'pdc'].includes(this.f.voucher_status);
-        },
-        formatPeso(n) {
-            return '₱' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        },
-
         openAdd() {
-            // Redirect to create page instead of opening modal.
             window.location.href = '{{ route('vouchers.create') }}' + (this.activeProjectId ? '?project_id=' + this.activeProjectId : '');
-        },
-        openEdit(v) {
-            this.editId = v.id;
-            this.lockedFields = false;
-            this.payeeOther = !!v.payee_name && ! this.payees.some(p => p.label === v.payee_name);
-            this.closeFormCombos();
-            this.f = {
-                voucher_no: v.voucher_no,
-                voucher_date: v.voucher_date,
-                due_date: v.due_date || '',
-                release_date: v.release_date || '',
-                payee_name: v.payee_name,
-                source: v.source || '',
-                project_id: v.project_id ? String(v.project_id) : '',
-                source_bank_account_id: v.source_bank_account_id ? String(v.source_bank_account_id) : '',
-                transaction_type: v.transaction_type || 'rfp',
-                category_id: v.category_id ? String(v.category_id) : '',
-                po_number: v.po_number || '',
-                reference: v.reference || '',
-                amount_payable: String(v.amount_payable),
-                mode_of_payment: v.mode_of_payment || 'cash',
-                particular: v.particular || '',
-                remarks: v.remarks || '',
-                source_of_fund: v.source_of_fund || '',
-                or_ref: v.or_ref || '',
-                change_amount: v.change_amount ? String(v.change_amount) : '',
-                notes: v.notes || '',
-                payment_status: v.status === 'paid' ? 'paid' : 'unpaid',
-                voucher_status: v.status || '',
-                balance_due: v.balance ?? 0,
-                attachments: v.attachments || [],
-            };
-            this.showForm = true;
         },
         openPay(v) {
             this.payVoucher = { id: v.id, no: v.voucher_no, payee: v.payee_name, balance: v.balance };
@@ -215,30 +45,12 @@ document.addEventListener('alpine:init', () => {
             };
             this.showPay = true;
         },
-        attachmentError: '',
-        validateAttachments(input) {
-            const maxBytes = 10 * 1024 * 1024;
-            const files = Array.from(input.files || []);
-            const oversized = files.filter(f => f.size > maxBytes).map(f => f.name);
-            if (oversized.length) {
-                this.attachmentError = oversized.join(', ');
-                input.value = '';
-            } else {
-                this.attachmentError = '';
-            }
-        },
-        closeForm() {
-            this.showForm = false;
-            this.editId = null;
-            this.attachmentError = '';
-            this.closeFormCombos();
-        },
         closePay() { this.showPay = false; },
     }));
 });
 </script>
 
-<div x-data="vouchersPage" class="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">
+<div x-data="vouchersPage" class="disburse-page">
 
 @if (session('success'))
     <div class="flex shrink-0 items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-xs font-medium text-green-800">
@@ -257,7 +69,7 @@ document.addEventListener('alpine:init', () => {
 @endif
 
 {{-- ── Header ───────────────────────────────────────────────────────────── --}}
-<div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
+<div class="disburse-page-header">
     <div class="min-w-0">
         @if ($activeProject)
             <a href="{{ route('projects.show.outflow', $activeProject) }}"
@@ -278,7 +90,7 @@ document.addEventListener('alpine:init', () => {
             @endif
         </p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="disburse-page-actions">
         <a href="{{ route('vouchers.payables') }}"
            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
             <i data-lucide="alarm-clock" class="h-4 w-4"></i> Payables
@@ -292,7 +104,7 @@ document.addEventListener('alpine:init', () => {
 
 {{-- ── Summary cards — company-wide totals, not relevant to Accounting Staff's own-vouchers view ── --}}
 @unless ($isAccountingUser)
-<div class="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+<div class="disburse-kpi-grid">
     <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div class="flex items-center justify-between">
             <p class="text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">Total transaction</p>
@@ -325,13 +137,13 @@ document.addEventListener('alpine:init', () => {
 @endunless
 
 {{-- ── Toolbar ──────────────────────────────────────────────────────────── --}}
-<div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
-    <div class="relative w-64">
+<div class="disburse-toolbar">
+    <div class="disburse-search">
         <i data-lucide="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"></i>
         <input type="search" x-model="q" autocomplete="off" placeholder="Search payee, number, project, category, source document"
                class="h-9 w-full rounded-md border border-slate-200 bg-white pl-8 pr-3 text-[12.5px] text-slate-700 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15">
     </div>
-    <form method="GET" action="{{ route('vouchers.index') }}" class="flex flex-wrap items-center gap-1.5" id="filter-form">
+    <form method="GET" action="{{ route('vouchers.index') }}" class="disburse-filter-form" id="filter-form">
         @if ($activeProject)
             <input type="hidden" name="project_id" value="{{ $activeProject->id }}">
         @endif
@@ -344,7 +156,7 @@ document.addEventListener('alpine:init', () => {
                    title="From date"
                    class="h-9 rounded-lg border border-slate-200 bg-white pl-8 pr-2 text-[12px] text-slate-700 shadow-sm outline-none focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/15 w-[140px]">
         </div>
-        <span class="text-[11px] text-slate-400">to</span>
+        <span class="hidden text-center text-[11px] text-slate-400 sm:inline">to</span>
         <input type="date" name="date_to" value="{{ $activeDateTo }}"
                onchange="this.form.submit()"
                title="To date"
@@ -384,7 +196,7 @@ document.addEventListener('alpine:init', () => {
 </div>
 
 {{-- ── Table ────────────────────────────────────────────────────────────── --}}
-<div class="data-grid min-h-0 min-w-0 flex-1 overflow-auto">
+<div class="disburse-data-grid">
     <table class="min-w-full">
         <thead class="sticky top-0 z-20">
             <tr>
@@ -417,33 +229,13 @@ document.addEventListener('alpine:init', () => {
                     $rowProjects   = $entryProjects->isNotEmpty() ? $entryProjects : ($v->project ? collect([$v->project]) : collect());
                     $rowCategories = $v->entries->pluck('category')->filter()->unique('id')->values();
                     $manyCategories = $rowCategories->count() > 2;
-                    $haystack = strtolower(implode(' ', array_filter([
-                        $v->voucher_no, $v->payee_name, $rowProjects->pluck('name')->implode(' '), $rowCategories->map(fn ($c) => $c->fullLabel())->implode(' '), $v->typeLabel(), $v->sourceDocumentLabel(), $v->po_number, $v->reference,
-                    ])));
-                    $payload = [
-                        'id' => $v->id, 'voucher_no' => $v->voucher_no,
-                        'voucher_date' => $v->voucher_date->format('Y-m-d'),
-                        'due_date' => $v->due_date?->format('Y-m-d'),
-                        'release_date' => $v->release_date?->format('Y-m-d'),
+                    $payPayload = [
+                        'id' => $v->id,
+                        'voucher_no' => $v->voucher_no,
                         'payee_name' => $v->payee_name,
-                        'source' => $v->source,
-                        'project_id' => $v->project_id,
-                        'source_bank_account_id' => $v->source_bank_account_id,
-                        'transaction_type' => $v->transaction_type, 'category_id' => $v->category_id,
-                        'po_number' => $v->po_number,
-                        'reference' => $v->reference,
-                        'amount_payable' => (float) $v->amount_payable, 'mode_of_payment' => $v->mode_of_payment,
-                        'status' => $v->status, 'particular' => $v->particular,
-                        'remarks' => $v->remarks, 'source_of_fund' => $v->source_of_fund,
-                        'or_ref' => $v->or_ref, 'change_amount' => (float) ($v->change_amount ?? 0),
-                        'notes' => $v->notes,
                         'balance' => $balance,
-                        'has_payments' => $v->payments->isNotEmpty(),
-                        'attachments' => $v->attachments->map(fn ($a) => [
-                            'id' => $a->id,
-                            'name' => $a->original_name,
-                            'size' => $a->humanSize(),
-                        ])->values(),
+                        'source_bank_account_id' => $v->source_bank_account_id,
+                        'mode_of_payment' => $v->mode_of_payment,
                     ];
                 @endphp
                 <tr @class([
@@ -453,7 +245,7 @@ document.addEventListener('alpine:init', () => {
                         'border-l-2 border-l-amber-300' => $notYetApproved && $v->isPendingApproval(),
                         'border-l-2 border-l-rose-300' => $notYetApproved && $v->isApprovalRejected(),
                     ])
-                    x-show="q.trim() === '' || @js($haystack).includes(q.trim().toLowerCase())"
+                    x-show="rowVisible({{ $v->id }})"
                     @click="window.location = '{{ route('vouchers.show', $v->id) }}'"
                     @if ($notYetApproved) title="{{ $lockReason }}" @endif>
                     <td class="border-b border-slate-100 px-4 py-2.5 align-top whitespace-nowrap">
@@ -536,7 +328,7 @@ document.addEventListener('alpine:init', () => {
                             @if ($v->isOpen())
                                 <button type="button"
                                         @if ($payLocked) disabled title="{{ $payLockReason }}"
-                                        @else @click="openPay({{ \Illuminate\Support\Js::from($payload) }})" @endif
+                                        @else @click="openPay({{ \Illuminate\Support\Js::from($payPayload) }})" @endif
                                         @class([
                                             'inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition',
                                             'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' => ! $payLocked,
@@ -620,6 +412,7 @@ document.addEventListener('alpine:init', () => {
             @endforelse
         </tbody>
     </table>
+    <x-pagination-simple :paginator="$vouchers" />
 </div>
 
 @include('vouchers.partials.payment-modal')

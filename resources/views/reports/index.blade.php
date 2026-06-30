@@ -40,7 +40,7 @@
     .page-break { page-break-before: always; }
 </style>
 
-<div class="space-y-4">
+<div class="disburse-page space-y-4">
 
     {{-- Print-only header --}}
     <div class="reports-print-only hidden">
@@ -76,7 +76,7 @@
     {{-- Filter bar (skip for Overall Position) --}}
     @if ($hasFilters)
         <form method="GET" action="{{ $reportRouteUrl }}"
-              class="no-print flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
+              class="reports-filter-form no-print">
             <div>
                 <label class="block text-[10.5px] font-semibold uppercase tracking-wider text-slate-500">From</label>
                 <input type="date" name="date_from" value="{{ $filters['date_from'] }}"
@@ -179,7 +179,7 @@
                 </div>
             @endif
 
-            <div class="flex gap-2">
+            <div class="flex w-full gap-2 sm:w-auto">
                 <button type="submit"
                         class="inline-flex h-9 items-center gap-1.5 rounded-md bg-omet-blue px-3.5 text-[12.5px] font-semibold text-white shadow-sm hover:bg-omet-lightblue">
                     <i data-lucide="play" class="h-3.5 w-3.5"></i>
@@ -194,8 +194,8 @@
     @endif
 
     {{-- Status line + export buttons --}}
-    <div class="no-print flex flex-wrap items-center justify-between gap-2">
-        <p class="text-[11.5px] text-slate-500">
+    <div class="reports-export-row no-print">
+        <p class="text-[11.5px] text-slate-500 min-w-0">
             @switch($activeTab)
                 @case('cash-outflow')
                     {{ $cashOutflow['row_count'] ?? 0 }} expense rows · {{ count($cashOutflow['groups'] ?? []) }} projects
@@ -220,7 +220,7 @@
             @endswitch
             · {{ $hasFilters ? (($filters['date_from'] || $filters['date_to']) ? trim(($filters['date_from'] ?: 'beginning') . ' → ' . ($filters['date_to'] ?: 'today')) : 'all dates') : 'live figures' }}
         </p>
-        <div class="flex flex-wrap items-center gap-1.5">
+        <div class="reports-export-actions">
             <form method="POST" action="{{ route('reports.exportPdf') }}" class="inline-flex">
                 @csrf
                 <input type="hidden" name="report" value="{{ $activeTab }}">
@@ -352,10 +352,11 @@
                         </tfoot>
                     </table>
                 </div>
+                @if ($cashOutflow['paginator'] ?? null)
+                    <x-pagination-simple :paginator="$cashOutflow['paginator']" />
+                @endif
             @endif
             @break
-
-        {{-- ACCOUNT BALANCES --}}
         @case('account-balances')
             @if (($accountBalances['row_count'] ?? 0) === 0)
                 <div class="rounded-lg border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
@@ -455,6 +456,9 @@
                         </tfoot>
                     </table>
                 </div>
+                @if ($transfers['paginator'] ?? null)
+                    <x-pagination-simple :paginator="$transfers['paginator']" />
+                @endif
             @endif
             @break
 
@@ -509,6 +513,9 @@
                         </tfoot>
                     </table>
                 </div>
+                @if ($collections['paginator'] ?? null)
+                    <x-pagination-simple :paginator="$collections['paginator']" />
+                @endif
             @endif
             @break
 
@@ -558,6 +565,9 @@
                         </tfoot>
                     </table>
                 </div>
+                @if ($payables['paginator'] ?? null)
+                    <x-pagination-simple :paginator="$payables['paginator']" />
+                @endif
             @endif
             @break
 
@@ -619,6 +629,9 @@
                         </tfoot>
                     </table>
                 </div>
+                @if ($vouchersReport['paginator'] ?? null)
+                    <x-pagination-simple :paginator="$vouchersReport['paginator']" />
+                @endif
             @endif
             @break
 

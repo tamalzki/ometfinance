@@ -54,7 +54,7 @@
         }
     }"
     @open-image-upload.window="openImageUpload($event.detail.id, $event.detail.name)"
-    class="flex min-h-0 min-w-0 flex-1 flex-col gap-2"
+    class="disburse-page"
 >
 
     {{-- ── Alerts ──────────────────────────────────────────────────────────── --}}
@@ -84,8 +84,8 @@
     @endphp
 
     {{-- ── Top bar: title + KPIs + action ─────────────────────────────────── --}}
-    <div class="flex shrink-0 flex-wrap items-stretch divide-x divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div class="flex min-w-[148px] flex-col justify-center px-4 py-3">
+    <div class="disburse-summary-strip">
+        <div class="disburse-summary-title flex min-w-0 flex-col justify-center">
             <p class="text-[13px] font-bold tracking-tight text-omet-navy">{{ $kindLabel ?? 'Projects' }}</p>
             <p class="mt-0.5 text-[11px] text-slate-400">
                 {{ $summary['active_count'] }} active · {{ $summary['total_count'] }} total
@@ -94,42 +94,42 @@
         </div>
 
         @if ($isExternal)
-            <div class="flex flex-col justify-center px-5 py-3">
+            <div class="flex flex-col justify-center">
                 <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Contract value</p>
                 <p class="mt-1 text-base font-bold tabular-nums text-blue-600" title="{{ $fmt($summary['contract_value']) }}">{{ $fmt($summary['contract_value']) }}</p>
             </div>
-            <div class="flex flex-col justify-center px-5 py-3">
+            <div class="flex flex-col justify-center">
                 <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Collected</p>
                 <p class="mt-1 text-base font-bold tabular-nums text-emerald-600" title="{{ $fmt($summary['total_collected']) }}">{{ $fmt($summary['total_collected']) }}</p>
                 <p class="text-[10px] text-slate-400">{{ $summary['collection_pct'] }}% of contract</p>
             </div>
-            <div class="flex flex-col justify-center px-5 py-3">
+            <div class="flex flex-col justify-center">
                 <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Outflow</p>
                 <p class="mt-1 text-base font-bold tabular-nums text-red-600" title="{{ $fmt($summary['total_outflow']) }}">{{ $fmt($summary['total_outflow']) }}</p>
             </div>
-            <div class="flex flex-col justify-center px-5 py-3">
+            <div class="flex flex-col justify-center">
                 <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Net cash</p>
                 <p class="mt-1 text-base font-bold tabular-nums {{ $netPositive ? 'text-emerald-600' : 'text-red-600' }}" title="{{ $fmt($summary['net_cash']) }}">{{ $fmt($summary['net_cash']) }}</p>
             </div>
         @else
-            <div class="flex flex-col justify-center px-5 py-3">
+            <div class="flex flex-col justify-center">
                 <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total budget</p>
                 <p class="mt-1 text-base font-bold tabular-nums text-indigo-600">
                     @if ($summary['contract_value'] > 0) {{ $fmt($summary['contract_value']) }} @else <span class="text-slate-300">—</span> @endif
                 </p>
             </div>
-            <div class="flex flex-col justify-center px-5 py-3">
+            <div class="flex flex-col justify-center">
                 <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Funded</p>
                 <p class="mt-1 text-base font-bold tabular-nums text-emerald-600" title="{{ $fmt($summary['total_collected']) }}">{{ $fmt($summary['total_collected']) }}</p>
             </div>
-            <div class="flex flex-col justify-center px-5 py-3">
+            <div class="flex flex-col justify-center">
                 <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total spent</p>
                 <p class="mt-1 text-base font-bold tabular-nums text-red-600" title="{{ $fmt($summary['total_outflow']) }}">{{ $fmt($summary['total_outflow']) }}</p>
                 @if ($summary['contract_value'] > 0)
                     <p class="text-[10px] text-slate-400">{{ $budgetUsedPct }}% of budget</p>
                 @endif
             </div>
-            <div class="flex flex-col justify-center px-5 py-3">
+            <div class="flex flex-col justify-center">
                 <p class="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{{ $summary['contract_value'] > 0 ? 'Remaining' : 'Net cash' }}</p>
                 <p class="mt-1 text-base font-bold tabular-nums {{ $positive ? 'text-indigo-600' : 'text-red-600' }}" title="{{ $fmt($summary['contract_value'] > 0 ? $remaining : $summary['net_cash']) }}">
                     {{ $fmt($summary['contract_value'] > 0 ? $remaining : $summary['net_cash']) }}
@@ -137,11 +137,9 @@
             </div>
         @endif
 
-        <div class="flex-1"></div>
-
-        <div class="flex items-center px-4 py-3">
+        <div class="disburse-summary-action">
             <button type="button" @click="openAddModal()"
-                    class="inline-flex items-center gap-1.5 rounded-lg bg-omet-blue px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue">
+                    class="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-omet-blue px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue sm:w-auto">
                 <i data-lucide="plus" class="h-3.5 w-3.5"></i>
                 New {{ $isExternal ? 'project' : 'in-house project' }}
             </button>
@@ -191,7 +189,7 @@
             </p>
         </div>
     @else
-        <div class="data-grid min-h-0 min-w-0 flex-1 overflow-auto">
+        <div class="disburse-data-grid">
                 <table class="min-w-full text-sm">
                     <thead class="sticky top-0 z-20">
                         <tr>
@@ -388,6 +386,7 @@
                         @endforeach
                     </tbody>
                 </table>
+                <x-pagination-simple :paginator="$projects" />
         </div>
     @endif
 

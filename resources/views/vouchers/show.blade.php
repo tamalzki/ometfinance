@@ -230,8 +230,8 @@ document.addEventListener('alpine:init', () => {
     @endif
 
     {{-- ── Toolbar ─────────────────────────────────────────────────────── --}}
-    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div class="flex flex-wrap items-center gap-2">
+    <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div class="flex flex-wrap items-center gap-2 min-w-0">
             <span class="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-semibold ring-1 {{ $statusTone[$voucher->status] ?? 'bg-slate-100 text-slate-600 ring-slate-200' }}">{{ $voucher->statusLabel() }}</span>
             @if ($voucher->isPendingApproval())
                 <span class="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-amber-100"><i data-lucide="hourglass" class="h-3 w-3"></i> For Approval</span>
@@ -251,7 +251,7 @@ document.addEventListener('alpine:init', () => {
                 · Balance {{ $peso($balance) }}
             </span>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <div class="disburse-page-actions shrink-0">
             <button type="button" onclick="window.print()"
                     class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-600 shadow-sm transition hover:border-omet-blue hover:text-omet-blue">
                 <i data-lucide="printer" class="h-3.5 w-3.5"></i> Print

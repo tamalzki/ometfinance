@@ -35,7 +35,7 @@ class VoucherRequestController extends Controller
             $query->where('type', $type);
         }
 
-        $requests = $query->get();
+        $requests = $query->paginate(50)->withQueryString();
 
         $counts = [
             'create'  => VoucherRequest::where('status', VoucherRequest::STATUS_PENDING)->where('type', VoucherRequest::TYPE_CREATE)->count(),

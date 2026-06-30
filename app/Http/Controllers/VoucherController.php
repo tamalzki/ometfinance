@@ -15,6 +15,7 @@ use App\Models\VoucherRequest;
 use App\Services\VoucherService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
@@ -44,7 +45,7 @@ class VoucherController extends Controller
         $dateFrom  = $request->query('date_from');
         $dateTo    = $request->query('date_to');
 
-        $query = Voucher::with(['project', 'entries.project', 'entries.category.parent', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments', 'approvalRequests'])
+        $query = Voucher::with($this->vouchersListEagerLoad())
             ->orderByDesc('voucher_date')
             ->orderByDesc('id');
 
@@ -76,7 +77,7 @@ class VoucherController extends Controller
             $query->where('project_id', $activeProject->id);
         }
 
-        $vouchers = $query->get();
+        $vouchers = $query->paginate(50)->withQueryString();
 
         $allQuery = Voucher::with('payments')->where('approval_status', 'approved');
         if (auth()->user()->isAccounting()) {
@@ -88,7 +89,7 @@ class VoucherController extends Controller
 
         // Encrypted columns — every money aggregate is computed in PHP.
         $summary = [
-            'count'       => $vouchers->count(),
+            'count'       => $vouchers->total(),
             'payable'     => (float) $all->sum(fn ($v) => (float) $v->amount_payable),
             'paid'        => (float) $all->sum(fn ($v) => $v->amountPaid()),
             'outstanding' => (float) $all->filter->isOpen()->sum(fn ($v) => $v->balanceDue()),
@@ -96,22 +97,20 @@ class VoucherController extends Controller
         ];
 
         return view('vouchers.index', [
-            'vouchers'   => $vouchers,
-            'summary'    => $summary,
-            'projects'   => $this->projectsForPicker(),
-            'accounts'   => $this->accountsForPicker(),
-            'payees'     => $this->payeesForPicker(),
-            'categoriesForPicker' => \App\Models\ProjectCategory::selectOptions(),
-            'statuses'   => Voucher::STATUSES,
-            'types'      => Voucher::TYPES,
-            'modes'      => Voucher::MODES,
-            'sources'    => Voucher::SOURCES,
-            'activeStatus'  => $status,
-            'activeType'    => $type,
-            'activeSource'  => $source,
-            'activeDateFrom' => $dateFrom,
-            'activeDateTo'   => $dateTo,
-            'activeProject' => $activeProject,
+            'vouchers'        => $vouchers,
+            'summary'         => $summary,
+            'rowSearchIndex'  => $this->buildVoucherRowSearchIndex($vouchers->getCollection()),
+            'accounts'        => $this->accountsForPicker(),
+            'modes'           => Voucher::MODES,
+            'statuses'        => Voucher::STATUSES,
+            'types'           => Voucher::TYPES,
+            'sources'         => Voucher::SOURCES,
+            'activeStatus'    => $status,
+            'activeType'      => $type,
+            'activeSource'    => $source,
+            'activeDateFrom'  => $dateFrom,
+            'activeDateTo'    => $dateTo,
+            'activeProject'   => $activeProject,
         ]);
     }
 
@@ -194,7 +193,11 @@ class VoucherController extends Controller
     {
         $bucket = $request->query('bucket');
 
-        $openQuery = Voucher::with(['project', 'sourceBankAccount.entity', 'payments.bankAccount', 'attachments'])
+        $openQuery = Voucher::with([
+            'project:id,name',
+            'sourceBankAccount.entity:id,name',
+            'payments:id,voucher_id,amount',
+        ])
             ->whereIn('status', ['unpaid', 'partial', 'pdc'])
             ->where('approval_status', 'approved')
             ->orderBy('due_date')
@@ -219,9 +222,19 @@ class VoucherController extends Controller
             $buckets[$b]['amount'] += $v->balanceDue();
         }
 
-        $rows = $bucket && array_key_exists($bucket, self::AGING_LABELS)
+        $filtered = $bucket && array_key_exists($bucket, self::AGING_LABELS)
             ? $open->filter(fn ($v) => $v->agingBucket() === $bucket)->values()
             : $open;
+
+        $page = max(1, (int) $request->query('page', 1));
+        $perPage = 50;
+        $rows = new LengthAwarePaginator(
+            $filtered->slice(($page - 1) * $perPage, $perPage)->values(),
+            $filtered->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         $summary = [
             'outstanding' => (float) $open->sum(fn ($v) => $v->balanceDue()),
@@ -234,13 +247,14 @@ class VoucherController extends Controller
         ];
 
         return view('vouchers.payables', [
-            'rows'         => $rows,
-            'buckets'      => $buckets,
-            'agingLabels'  => self::AGING_LABELS,
-            'summary'      => $summary,
-            'accounts'     => $this->accountsForPicker(),
-            'modes'        => Voucher::MODES,
-            'activeBucket' => $bucket,
+            'rows'            => $rows,
+            'rowSearchIndex'  => $this->buildPayablesRowSearchIndex($rows->getCollection()),
+            'buckets'         => $buckets,
+            'agingLabels'     => self::AGING_LABELS,
+            'summary'         => $summary,
+            'accounts'        => $this->accountsForPicker(),
+            'modes'           => Voucher::MODES,
+            'activeBucket'    => $bucket,
         ]);
     }
 
@@ -866,5 +880,60 @@ class VoucherController extends Controller
     private function accountsForPicker()
     {
         return BankAccount::with('entity')->orderBy('name')->get();
+    }
+
+    /** Eager loads for voucher list tables (index, not show/edit). */
+    private function vouchersListEagerLoad(): array
+    {
+        return [
+            'project:id,name',
+            'entries' => fn ($q) => $q->select('id', 'voucher_id', 'project_id', 'category_id')
+                ->with([
+                    'project:id,name',
+                    'category' => fn ($q) => $q->with('parent'),
+                ]),
+            'sourceBankAccount.entity:id,name',
+            'payments' => fn ($q) => $q->select('id', 'voucher_id', 'amount', 'bank_account_id'),
+            'approvalRequests' => fn ($q) => $q->select('id', 'voucher_id', 'type', 'status', 'requested_by', 'review_note'),
+        ];
+    }
+
+    /** @param  \Illuminate\Support\Collection<int, Voucher>  $vouchers */
+    private function buildVoucherRowSearchIndex($vouchers): array
+    {
+        $index = [];
+        foreach ($vouchers as $v) {
+            $entryProjects = $v->entries->pluck('project')->filter()->unique('id');
+            $rowProjects = $entryProjects->isNotEmpty() ? $entryProjects : ($v->project ? collect([$v->project]) : collect());
+            $rowCategories = $v->entries->pluck('category')->filter()->unique('id');
+            $index[$v->id] = strtolower(implode(' ', array_filter([
+                $v->voucher_no,
+                $v->payee_name,
+                $rowProjects->pluck('name')->implode(' '),
+                $rowCategories->map(fn ($c) => $c->fullLabel())->implode(' '),
+                $v->typeLabel(),
+                $v->sourceDocumentLabel(),
+                $v->po_number,
+                $v->reference,
+            ])));
+        }
+
+        return $index;
+    }
+
+    /** @param  \Illuminate\Support\Collection<int, Voucher>  $rows */
+    private function buildPayablesRowSearchIndex($rows): array
+    {
+        $index = [];
+        foreach ($rows as $v) {
+            $index[$v->id] = strtolower(implode(' ', array_filter([
+                $v->voucher_no,
+                $v->payee_name,
+                $v->project?->name,
+                $v->typeLabel(),
+            ])));
+        }
+
+        return $index;
     }
 }

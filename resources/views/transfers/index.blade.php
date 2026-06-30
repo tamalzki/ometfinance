@@ -56,6 +56,16 @@ document.addEventListener('alpine:init', () => {
         toProjQuery: '',
 
         q: '',
+        rowSearchIndex: @json($rowSearchIndex),
+
+        get needle() {
+            return (this.q || '').trim().toLowerCase();
+        },
+        rowVisible(id) {
+            if (! this.needle) return true;
+            const hay = this.rowSearchIndex[id];
+            return hay && hay.includes(this.needle);
+        },
 
         openAdd() {
             this.editId = null;
@@ -113,7 +123,7 @@ document.addEventListener('alpine:init', () => {
 
 <div
     x-data="transfersPage"
-    class="flex min-h-0 flex-1 flex-col gap-2.5"
+    class="disburse-page"
 >
 
 {{-- ── Flash ───────────────────────────────────────────────────────────── --}}
@@ -136,21 +146,21 @@ document.addEventListener('alpine:init', () => {
 @endif
 
 {{-- ── Page header ───────────────────────────────────────────────────────── --}}
-<div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
+<div class="disburse-page-header">
     <div class="min-w-0">
         <h1 class="text-xl font-bold tracking-tight text-omet-navy">Transfers</h1>
         <p class="text-xs text-slate-500">{{ $summary['count'] }} {{ \Illuminate\Support\Str::plural('transfer', $summary['count']) }} · ₱{{ number_format($summary['total'], 2) }} total moved</p>
     </div>
     <button type="button"
             @click="openAdd()"
-            class="inline-flex items-center gap-1.5 rounded-lg bg-omet-blue px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-omet-lightblue">
+            class="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-omet-blue px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-omet-lightblue sm:w-auto">
         <i data-lucide="plus" class="h-4 w-4"></i>
         Add Transfer
     </button>
 </div>
 
 {{-- ── Summary cards (financial KPI style, matches projects index) ────────── --}}
-<div class="grid shrink-0 grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+<div class="disburse-kpi-grid">
     {{-- Total moved --}}
     <div class="overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div class="flex items-center justify-between">
@@ -202,9 +212,9 @@ document.addEventListener('alpine:init', () => {
 
 {{-- ── Toolbar (flat, unified with accounts/projects) ─────────────────────── --}}
 @php $hasDateFilter = (bool) ($from || $to); @endphp
-<div class="flex shrink-0 flex-wrap items-center justify-between gap-3">
+<div class="disburse-toolbar">
     {{-- Search --}}
-    <div class="relative w-72">
+    <div class="disburse-search">
         <i data-lucide="search" class="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"></i>
         <input type="search" x-model="q" autocomplete="off"
                placeholder="Search transfers"
@@ -219,7 +229,7 @@ document.addEventListener('alpine:init', () => {
     </div>
 
     {{-- Date filter --}}
-    <form method="GET" action="{{ route('transfers.index') }}" class="flex flex-wrap items-center gap-1.5">
+    <form method="GET" action="{{ route('transfers.index') }}" class="disburse-filter-form">
         <label class="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-slate-400">
             <i data-lucide="calendar-range" class="h-3.5 w-3.5"></i>
             Period
@@ -241,7 +251,7 @@ document.addEventListener('alpine:init', () => {
 </div>
 
 {{-- ── Movements table (unified data-grid) ────────────────────────────────── --}}
-<div class="data-grid min-h-0 flex-1 overflow-auto">
+<div class="disburse-data-grid">
     <table class="min-w-full">
         <thead class="sticky top-0 z-20">
             <tr>
@@ -259,16 +269,10 @@ document.addEventListener('alpine:init', () => {
             <tbody>
                 @forelse ($transfers as $t)
                     @php
-                        $haystack = strtolower(implode(' ', array_filter([
-                            $t->fromAccount?->name, $t->fromAccount?->entity?->name,
-                            $t->toAccount?->name,   $t->toAccount?->entity?->name,
-                            $t->fromProject?->name, $t->toProject?->name,
-                            $t->purposeLabel(), $t->memo, $t->reason,
-                        ])));
                         $isIntercompany = $t->isIntercompany();
                     @endphp
                     <tr class="group transition-colors hover:bg-slate-50/70"
-                        x-show="q.trim() === '' || @js($haystack).includes(q.trim().toLowerCase())">
+                        x-show="rowVisible({{ $t->id }})">
                         <td class="border-b border-slate-100 px-4 py-2.5 tabular-nums text-[12.5px] text-slate-600 whitespace-nowrap align-top">
                             {{ $t->date->format('M d, Y') }}
                         </td>
@@ -384,6 +388,7 @@ document.addEventListener('alpine:init', () => {
                 @endforelse
             </tbody>
         </table>
+        <x-pagination-simple :paginator="$transfers" />
     </div>
 
 {{-- ── NEW / EDIT TRANSFER modal ─────────────────────────────────────────── --}}
