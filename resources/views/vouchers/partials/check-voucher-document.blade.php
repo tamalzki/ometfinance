@@ -221,6 +221,9 @@
             <p class="mt-1 border-b border-slate-400 pb-1 font-semibold text-slate-900">
                 {{ $voucher->preparedBy?->name ?? '—' }}
             </p>
+            @if ($voucher->preparedBy)
+                <p class="mt-0.5 text-[10px] text-slate-500">Prepared on {{ $voucher->created_at->format('M j, Y \a\t g:i A') }}</p>
+            @endif
         </div>
 
         <div class="min-w-[220px] text-right">

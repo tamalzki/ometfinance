@@ -227,7 +227,7 @@ document.addEventListener('alpine:init', () => {
 
 <x-unsaved-changes-guard selector="#voucherForm" />
 
-<div class="mx-auto max-w-4xl px-4 py-8" x-data="createVoucherPage">
+<div class="voucher-form-page mx-auto max-w-4xl px-4 py-8" x-data="createVoucherPage">
 
     {{-- Page header --}}
     <div class="mb-6 flex items-start justify-between gap-4">
@@ -271,35 +271,35 @@ document.addEventListener('alpine:init', () => {
              CARD 0 — Source Document for Voucher
         ══════════════════════════════════════════════════════════════ --}}
         <div class="rounded-xl border border-slate-200 border-t-4 border-t-amber-400 bg-white shadow-sm">
-            <div class="flex items-center gap-2 border-b border-slate-100 px-6 py-3">
+            <div class="flex items-center gap-2 border-b border-slate-100 px-4 py-3 sm:px-6">
                 <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-amber-50">
                     <i data-lucide="tag" class="h-3 w-3 text-amber-600"></i>
                 </span>
                 <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Source Document for Voucher</h2>
             </div>
-            <div class="flex flex-wrap items-center gap-3 px-6 py-3">
+            <div class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:px-6">
                 <input type="hidden" name="source_document_type" :value="f.source_document_type">
-                <div class="flex flex-wrap gap-1.5">
+                <div class="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
                     @foreach ($sourceDocuments as $key => $label)
                         <button type="button" @click="f.source_document_type = '{{ $key }}'"
-                                class="flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition"
+                                class="flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[12px] font-medium transition"
                                 :class="f.source_document_type === '{{ $key }}' ? 'border-omet-blue bg-omet-blue/5 text-omet-blue' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'">
                             <i data-lucide="{{ $sourceDocumentIcons[$key] ?? 'file-question' }}" class="h-3.5 w-3.5"></i>
                             {{ $label }}
                         </button>
                     @endforeach
                 </div>
-                <div x-show="!!f.source_document_type" x-cloak class="flex items-center gap-2 border-l border-slate-200 pl-3">
+                <div x-show="!!f.source_document_type" x-cloak class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:border-l sm:border-slate-200 sm:pl-3">
                     <label class="shrink-0 text-[11px] font-medium text-gray-600">
                         <span x-text="docNumberLabel(f.source_document_type)"></span> <span class="text-red-400">*</span>
                     </label>
                     <input type="text" name="po_number" x-model="f.po_number" placeholder="Number"
                            :required="!!f.source_document_type"
-                           class="h-8 w-36 rounded-lg border border-slate-200 bg-white px-2.5 text-[12.5px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10">
+                           class="h-8 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[12.5px] text-gray-800 outline-none transition focus:border-omet-blue focus:ring-2 focus:ring-omet-blue/10 sm:w-36">
                 </div>
             </div>
-            @error('source_document_type')<p class="px-6 pb-2.5 -mt-1 text-[10.5px] text-red-600">{{ $message }}</p>@enderror
-            @error('po_number')<p class="px-6 pb-2.5 -mt-1 text-[10.5px] text-red-600">{{ $message }}</p>@enderror
+            @error('source_document_type')<p class="px-4 pb-2.5 -mt-1 text-[10.5px] text-red-600 sm:px-6">{{ $message }}</p>@enderror
+            @error('po_number')<p class="px-4 pb-2.5 -mt-1 text-[10.5px] text-red-600 sm:px-6">{{ $message }}</p>@enderror
         </div>
 
         {{-- ══════════════════════════════════════════════════════════════
@@ -307,14 +307,14 @@ document.addEventListener('alpine:init', () => {
         ══════════════════════════════════════════════════════════════ --}}
         <div class="mt-5 rounded-xl border border-slate-200 border-t-4 border-t-omet-blue bg-white shadow-sm">
 
-            <div class="flex items-center gap-2.5 border-b border-slate-100 px-6 py-4">
+            <div class="flex items-center gap-2.5 border-b border-slate-100 px-4 py-4 sm:px-6">
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-omet-blue/10">
                     <i data-lucide="file-text" class="h-3.5 w-3.5 text-omet-blue"></i>
                 </span>
                 <h2 class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Voucher Information</h2>
             </div>
 
-            <div class="space-y-6 px-6 py-5">
+            <div class="space-y-6 px-4 py-5 sm:px-6">
 
                 {{-- Reference & Dates --}}
                 <div>
@@ -600,7 +600,7 @@ document.addEventListener('alpine:init', () => {
         <div class="mt-5 rounded-xl border border-slate-200 border-t-4 border-t-indigo-400 bg-white shadow-sm">
 
             {{-- Card header --}}
-            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
                 <div class="flex items-start gap-2.5">
                     <span class="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50">
                         <i data-lucide="scale" class="h-3.5 w-3.5 text-indigo-600"></i>
@@ -614,19 +614,19 @@ document.addEventListener('alpine:init', () => {
                     </div>
                 </div>
                 {{-- + Debit / + Credit buttons --}}
-                <div class="flex items-center gap-2">
+                <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center sm:gap-2">
                     <button type="button" @click="addEntry('debit')"
-                            class="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2 text-[12px] font-semibold text-blue-700 transition hover:bg-blue-100">
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3.5 py-2 text-[12px] font-semibold text-blue-700 transition hover:bg-blue-100">
                         <i data-lucide="plus" class="h-3.5 w-3.5"></i> Debit
                     </button>
                     <button type="button" @click="addEntry('credit')"
-                            class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-[12px] font-semibold text-emerald-700 transition hover:bg-emerald-100">
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-[12px] font-semibold text-emerald-700 transition hover:bg-emerald-100">
                         <i data-lucide="plus" class="h-3.5 w-3.5"></i> Credit
                     </button>
                 </div>
             </div>
 
-            <div class="px-6 py-5">
+            <div class="px-4 py-5 sm:px-6">
 
                 @error('entries')
                     <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] font-medium text-red-700">{{ $message }}</div>
@@ -650,13 +650,13 @@ document.addEventListener('alpine:init', () => {
                 <template x-if="entries.length > 0">
                     <div class="space-y-2">
                         <template x-for="(entry, idx) in entries" :key="idx">
-                            <div class="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2.5 transition"
+                            <div class="flex flex-col items-stretch gap-3 rounded-lg border px-3 py-2.5 transition sm:flex-row sm:flex-wrap sm:items-center sm:gap-2"
                                  :class="entry.entry_type === 'debit'
                                      ? 'border-blue-100 bg-blue-50/40'
                                      : 'border-emerald-100 bg-emerald-50/30'">
 
                                 {{-- DR / CR toggle --}}
-                                <div class="flex shrink-0 overflow-hidden rounded-lg border"
+                                <div class="flex w-full shrink-0 overflow-hidden rounded-lg border sm:w-auto"
                                      :class="entry.entry_type === 'debit' ? 'border-blue-200' : 'border-emerald-200'">
                                     <button type="button" @click="entry.entry_type = 'debit'"
                                             class="px-3 py-1.5 text-[11.5px] font-bold transition"
@@ -673,7 +673,7 @@ document.addEventListener('alpine:init', () => {
                                 <input type="hidden" :name="`entries[${idx}][id]`" :value="entry.id">
 
                                 {{-- Category combobox --}}
-                                <div class="relative flex-[2] min-w-[180px]" @click.outside="entry._catOpen = false">
+                                <div class="relative w-full sm:flex-[2] sm:min-w-[180px]" @click.outside="entry._catOpen = false">
                                     <button type="button"
                                             @click="entry._catOpen = !entry._catOpen"
                                             class="flex h-9 w-full items-center justify-between rounded-lg border bg-white px-2.5 text-left text-[12px] outline-none transition"
@@ -705,7 +705,7 @@ document.addEventListener('alpine:init', () => {
                                 </div>
 
                                 {{-- Amount --}}
-                                <div class="relative w-[120px] shrink-0">
+                                <div class="relative w-full shrink-0 sm:w-[120px]">
                                     <span class="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[12px] text-slate-400">₱</span>
                                     <input type="number" step="0.01" min="0.01"
                                            :name="`entries[${idx}][amount]`"
@@ -714,7 +714,7 @@ document.addEventListener('alpine:init', () => {
                                 </div>
 
                                 {{-- Project combobox --}}
-                                <div class="relative flex-[2] min-w-[160px]" @click.outside="entry._projOpen = false">
+                                <div class="relative w-full sm:flex-[2] sm:min-w-[160px]" @click.outside="entry._projOpen = false">
                                     <button type="button"
                                             @click="entry._projOpen = !entry._projOpen"
                                             class="flex h-9 w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2.5 text-left text-[12px] text-gray-700 outline-none transition hover:border-slate-300">
@@ -755,11 +755,11 @@ document.addEventListener('alpine:init', () => {
                                 {{-- Description --}}
                                 <input type="text" :name="`entries[${idx}][description]`"
                                        x-model="entry.description" placeholder="Description (optional)"
-                                       class="h-9 flex-[3] min-w-[130px] rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] text-gray-700 outline-none focus:border-omet-blue focus:ring-1 focus:ring-omet-blue/10">
+                                       class="h-9 w-full rounded-lg border border-slate-200 bg-white px-2.5 text-[12px] text-gray-700 outline-none focus:border-omet-blue focus:ring-1 focus:ring-omet-blue/10 sm:flex-[3] sm:min-w-[130px]">
 
                                 {{-- Remove --}}
                                 <button type="button" @click="removeEntry(idx)"
-                                        class="ml-auto shrink-0 rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600">
+                                        class="shrink-0 self-end rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600 sm:ml-auto">
                                     <i data-lucide="trash-2" class="h-4 w-4 pointer-events-none"></i>
                                 </button>
                             </div>
@@ -813,7 +813,7 @@ document.addEventListener('alpine:init', () => {
              CARD 3 — Attachments
         ══════════════════════════════════════════════════════════════ --}}
         <div class="mt-5 rounded-xl border border-slate-200 border-t-4 border-t-slate-300 bg-white shadow-sm">
-            <div class="flex items-center gap-2.5 border-b border-slate-100 px-6 py-4">
+            <div class="flex items-center gap-2.5 border-b border-slate-100 px-4 py-4 sm:px-6">
                 <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100">
                     <i data-lucide="paperclip" class="h-3.5 w-3.5 text-slate-500"></i>
                 </span>
@@ -827,7 +827,7 @@ document.addEventListener('alpine:init', () => {
                     @endif
                 </h2>
             </div>
-            <div class="px-6 py-5">
+            <div class="px-4 py-5 sm:px-6">
                 @if ($hasExistingAttachments)
                 <ul class="mb-3 divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200">
                     @foreach ($voucher->attachments as $a)
@@ -873,7 +873,7 @@ document.addEventListener('alpine:init', () => {
         <div class="mt-6 space-y-3">
 
             {{-- Amount Payable — emphasized, auto-calculated --}}
-            <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-omet-blue/20 bg-omet-blue/5 px-6 py-4">
+            <div class="hidden flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-omet-blue/20 bg-omet-blue/5 px-4 py-4 sm:px-6 md:flex">
                 <div>
                     <p class="text-[10.5px] font-semibold uppercase tracking-wide text-omet-blue">Amount Payable</p>
                     <p class="mt-0.5 text-[10.5px] text-slate-500">Auto-calculated from the accounting entries above</p>
@@ -915,7 +915,7 @@ document.addEventListener('alpine:init', () => {
             </div>
             @endif
 
-            <div class="flex items-center justify-between gap-3">
+            <div class="hidden items-center justify-between gap-3 md:flex">
                 <p class="text-[11px] text-slate-400">
                     Fields marked <span class="font-semibold text-red-400">*</span> are required.
                 </p>
@@ -928,6 +928,33 @@ document.addEventListener('alpine:init', () => {
                             :disabled="!!attachmentError || !isBalanced"
                             class="inline-flex items-center gap-2 rounded-lg bg-omet-blue px-6 py-2.5 text-[13px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue disabled:cursor-not-allowed disabled:opacity-50">
                         <i data-lucide="check" class="h-4 w-4"></i> {{ auth()->user()->isAccounting() && $voucher->approval_status === 'approved' ? 'Submit Edit Request' : 'Update Voucher' }}
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="voucher-form-sticky-bar">
+            <div class="mx-auto flex max-w-3xl items-center gap-3">
+                <div class="min-w-0 flex-1">
+                    <p class="text-[10px] font-semibold uppercase tracking-wide text-omet-blue">Amount Payable</p>
+                    <p class="truncate text-lg font-bold tabular-nums text-omet-navy" x-text="formatPeso(amountPayable)"></p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                    <a href="{{ route('vouchers.show', $voucher) }}"
+                       class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[12px] font-semibold text-gray-600 transition hover:bg-gray-50">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                            :disabled="!!attachmentError || !isBalanced"
+                            class="inline-flex items-center gap-1.5 rounded-lg bg-omet-blue px-4 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:bg-omet-lightblue disabled:cursor-not-allowed disabled:opacity-50">
+                        <i data-lucide="check" class="h-4 w-4"></i>
+                        @if (auth()->user()->isAccounting() && $voucher->approval_status === 'approved')
+                            <span class="sm:hidden">Submit</span>
+                            <span class="hidden sm:inline">Submit Edit Request</span>
+                        @else
+                            <span class="sm:hidden">Update</span>
+                            <span class="hidden sm:inline">Update Voucher</span>
+                        @endif
                     </button>
                 </div>
             </div>

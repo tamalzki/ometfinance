@@ -104,7 +104,9 @@ document.addEventListener('alpine:init', () => {
         </a>
         <a href="{{ route('vouchers.create', $activeProject ? ['project_id' => $activeProject->id] : []) }}"
            class="inline-flex items-center gap-1.5 rounded-lg bg-omet-blue px-3.5 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-omet-lightblue">
-            <i data-lucide="plus" class="h-4 w-4"></i> Add Voucher
+            <i data-lucide="plus" class="h-4 w-4"></i>
+            <span class="sm:hidden">Add</span>
+            <span class="hidden sm:inline">Add Voucher</span>
         </a>
     </div>
 </div>

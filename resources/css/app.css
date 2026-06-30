@@ -1323,6 +1323,49 @@
         @apply data-grid -mx-1 min-h-0 min-w-0 flex-1 overflow-auto px-1 sm:mx-0 sm:px-0;
     }
 
+    .disburse-row-action {
+        @apply inline-flex shrink-0 items-center justify-center gap-1 rounded-md border px-2.5 py-1 text-[11px] font-semibold shadow-sm transition;
+    }
+
+    .disburse-row-actions {
+        @apply flex flex-row flex-nowrap items-center justify-end gap-1.5;
+    }
+
+    @media (max-width: 767px) {
+        .disburse-data-grid thead th:last-child,
+        .disburse-data-grid tbody td:last-child,
+        .disburse-data-grid tfoot td:last-child {
+            width: 5.5rem;
+            min-width: 5.5rem;
+            max-width: 5.5rem;
+            padding-left: 0.25rem;
+            padding-right: 0.25rem;
+        }
+
+        .disburse-row-action {
+            height: 2rem;
+            width: 2rem;
+            padding: 0;
+        }
+
+        .disburse-row-action .disburse-row-action-label {
+            display: none;
+        }
+
+        .disburse-row-actions {
+            gap: 0.25rem;
+        }
+    }
+
+    .voucher-form-page {
+        @apply pb-24 md:pb-10;
+    }
+
+    .voucher-form-sticky-bar {
+        @apply fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] backdrop-blur-sm md:hidden;
+        padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    }
+
     .disburse-tab-nav {
         @apply flex shrink-0 flex-wrap items-center gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 sm:flex-nowrap;
     }
