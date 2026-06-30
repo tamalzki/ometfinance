@@ -35,10 +35,15 @@
                     $notYetApproved = $isAccountingUser && $v->approval_status !== 'approved';
                     $lockReason = $v->isPendingApproval()
                         ? 'Waiting for CFO approval'
-                        : ($v->isApprovalRejected() ? 'Rejected by CFO — not actionable' : null);
+                        : ($v->isApprovalRejected() ? 'Rejected by CFO — edit and resubmit, or delete' : null);
                     $pendingReq = $v->pendingRequest();
                     $payLocked = $notYetApproved || $pendingReq !== null;
                     $payLockReason = $notYetApproved ? $lockReason : ($pendingReq ? $pendingReq->typeLabel() . ' is already pending review for this voucher.' : null);
+                    // Edit stays open for pending (nothing approved yet to protect) and
+                    // rejected (fixing it is the whole point) — only an approved voucher
+                    // with another request already in review should be locked.
+                    $editLocked = $isAccountingUser && $v->approval_status === 'approved' && $pendingReq !== null;
+                    $editLockReason = $editLocked ? $pendingReq->typeLabel() . ' is already pending review for this voucher.' : null;
                     $entryProjects = $v->entries->pluck('project')->filter()->unique('id')->values();
                     $rowProjects   = $entryProjects->isNotEmpty() ? $entryProjects : ($v->project ? collect([$v->project]) : collect());
                     $rowCategories = $v->entries->pluck('category')->filter()->unique('id')->values();
@@ -151,8 +156,8 @@
                                     <span class="disburse-row-action-label hidden md:inline">Pay</span>
                                 </button>
                             @endif
-                            @if ($notYetApproved)
-                                <span title="{{ $lockReason }}" aria-label="{{ $lockReason }}"
+                            @if ($editLocked)
+                                <span title="{{ $editLockReason }}" aria-label="{{ $editLockReason }}"
                                       class="disburse-row-action cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400">
                                     <i data-lucide="pencil" class="h-3.5 w-3.5 pointer-events-none"></i>
                                     <span class="disburse-row-action-label hidden md:inline">Edit</span>

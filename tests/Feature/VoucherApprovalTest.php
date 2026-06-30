@@ -165,6 +165,40 @@ class VoucherApprovalTest extends TestCase
         $this->assertEquals(0, VoucherRequest::where('voucher_id', $voucher->id)->count());
     }
 
+    public function test_accounting_update_on_rejected_voucher_resubmits_for_approval(): void
+    {
+        $staff = User::factory()->create(['role' => 'accounting']);
+        $cfo   = User::factory()->create(['role' => 'cfo']);
+
+        $voucher = Voucher::create($this->basePayload('APR-004B') + ['approval_status' => 'rejected', 'prepared_by' => $staff->id]);
+        $voucher->approvalRequests()->create([
+            'type'         => VoucherRequest::TYPE_CREATE,
+            'status'       => VoucherRequest::STATUS_REJECTED,
+            'requested_by' => $staff->id,
+            'reviewed_by'  => $cfo->id,
+            'reviewed_at'  => now(),
+            'review_note'  => 'Wrong amount, please fix.',
+        ]);
+
+        $payload = $this->basePayload('APR-004B') + $this->withAttachment();
+        $payload['amount_payable'] = 1500;
+        $payload['reason'] = 'Corrected the amount per CFO note';
+
+        $response = $this->actingAs($staff)->put(route('vouchers.update', $voucher), $payload);
+        $response->assertRedirect(route('vouchers.show', $voucher));
+
+        $voucher->refresh();
+        $this->assertEquals('pending', $voucher->approval_status, 'Fixing a rejected voucher must put it back in front of the CFO.');
+        $this->assertEquals(1500, (float) $voucher->amount_payable, 'The corrected value must be saved directly — no retyping into a new voucher.');
+
+        $this->assertEquals(2, VoucherRequest::where('voucher_id', $voucher->id)->count(), 'The original rejection stays on record alongside the fresh request.');
+
+        $newRequest = VoucherRequest::where('voucher_id', $voucher->id)->where('status', VoucherRequest::STATUS_PENDING)->first();
+        $this->assertNotNull($newRequest);
+        $this->assertEquals(VoucherRequest::TYPE_CREATE, $newRequest->type);
+        $this->assertEquals($staff->id, $newRequest->requested_by);
+    }
+
     public function test_accounting_destroy_on_approved_voucher_creates_delete_request(): void
     {
         $staff = User::factory()->create(['role' => 'accounting']);

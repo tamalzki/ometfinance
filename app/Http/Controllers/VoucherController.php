@@ -49,6 +49,7 @@ class VoucherController extends Controller
         $dateFrom  = $request->query('date_from');
         $dateTo    = $request->query('date_to');
         $search    = $this->normalizeSearch($request->query('q'));
+        $approval  = $request->query('approval');
 
         $query = Voucher::with($this->vouchersListEagerLoad())
             ->orderByDesc('voucher_date')
@@ -59,6 +60,10 @@ class VoucherController extends Controller
             $query->whereHas('approvalRequests', fn ($q) => $q
                 ->where('type', VoucherRequest::TYPE_CREATE)
                 ->where('requested_by', auth()->id()));
+        }
+
+        if ($approval && in_array($approval, ['pending', 'approved', 'rejected'], true)) {
+            $query->where('approval_status', $approval);
         }
 
         if ($status && array_key_exists($status, Voucher::STATUSES)) {
@@ -94,6 +99,19 @@ class VoucherController extends Controller
         }
         $all = $allQuery->get();
 
+        // Counts for the Accounting Staff approval-status tabs — scoped to
+        // their own submissions the same way the table itself is above.
+        $ownVouchers = Voucher::query();
+        if (auth()->user()->isAccounting()) {
+            $ownVouchers->whereHas('approvalRequests', fn ($q) => $q
+                ->where('type', VoucherRequest::TYPE_CREATE)
+                ->where('requested_by', auth()->id()));
+        }
+        $approvalCounts = [
+            'pending'  => (clone $ownVouchers)->where('approval_status', 'pending')->count(),
+            'rejected' => (clone $ownVouchers)->where('approval_status', 'rejected')->count(),
+        ];
+
         // Encrypted columns — every money aggregate is computed in PHP.
         $summary = [
             'count'       => $vouchers->total(),
@@ -106,6 +124,7 @@ class VoucherController extends Controller
         $viewData = [
             'vouchers'        => $vouchers,
             'summary'         => $summary,
+            'approvalCounts'  => $approvalCounts,
             'accounts'        => $this->accountsForPicker(),
             'modes'           => Voucher::MODES,
             'statuses'        => Voucher::STATUSES,
@@ -118,6 +137,7 @@ class VoucherController extends Controller
             'activeDateTo'    => $dateTo,
             'activeSearch'    => $search,
             'activeProject'   => $activeProject,
+            'activeApproval'  => $approval,
         ];
 
         if ($partial = $this->disburseListPartialResponse($request, 'vouchers.partials.index-table', $viewData)) {
@@ -386,6 +406,14 @@ class VoucherController extends Controller
             return $this->submitEditRequest($request, $voucher, $data, $entryRows);
         }
 
+        // A rejected voucher is being fixed and put back in front of the CFO —
+        // reuse the same row (so Accounting Staff never has to retype it) and
+        // file a fresh create-request rather than resurrecting the rejected one.
+        $isResubmission = auth()->user()->isAccounting() && $voucher->approval_status === 'rejected';
+        if ($isResubmission) {
+            $data['approval_status'] = 'pending';
+        }
+
         $markPaid = ($data['payment_status'] ?? 'unpaid') === 'paid';
         unset($data['payment_status']);
 
@@ -408,7 +436,7 @@ class VoucherController extends Controller
 
         // All validation passed — persist everything atomically so a later
         // failure (e.g. payment recording) can't leave a half-saved voucher.
-        DB::transaction(function () use ($request, $voucher, $data, $entryRows) {
+        DB::transaction(function () use ($request, $voucher, $data, $entryRows, $isResubmission) {
             $voucher->update($data);
             $this->saveAttachmentsFromRequest($request, $voucher);
 
@@ -424,6 +452,14 @@ class VoucherController extends Controller
                         'sort_order'  => $i,
                     ]);
                 }
+            }
+
+            if ($isResubmission) {
+                $voucher->approvalRequests()->create([
+                    'type'         => VoucherRequest::TYPE_CREATE,
+                    'requested_by' => auth()->id(),
+                    'reason'       => $request->input('reason'),
+                ]);
             }
         });
 
@@ -443,7 +479,9 @@ class VoucherController extends Controller
 
         VoucherService::recompute($voucher);
 
-        $message = "Voucher {$voucher->voucher_no} updated" . ($paidOnUpdate ? ' and marked as paid.' : '.');
+        $message = $isResubmission
+            ? "Voucher {$voucher->voucher_no} updated and resubmitted for CFO approval."
+            : "Voucher {$voucher->voucher_no} updated" . ($paidOnUpdate ? ' and marked as paid.' : '.');
 
         return redirect()->route('vouchers.show', $voucher)
             ->with('success', $message);

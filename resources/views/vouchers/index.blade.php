@@ -81,6 +81,7 @@ document.addEventListener('alpine:init', () => {
                     'date_from' => $activeDateFrom,
                     'date_to' => $activeDateTo,
                     'project_id' => $activeProject?->id,
+                    'approval' => $activeApproval,
                 ])) }}"
                    data-disburse-search-clear
                    class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-200">
@@ -145,6 +146,45 @@ document.addEventListener('alpine:init', () => {
 </div>
 @endunless
 
+{{-- ── Approval-status tabs — Accounting Staff only; lets them jump straight
+     to what's awaiting CFO review or what bounced back, without retyping
+     a rejected voucher from scratch (Edit on a rejected row resubmits it). ── --}}
+@if ($isAccountingUser)
+@php
+    $tabBase = array_filter([
+        'source'     => $activeSource,
+        'status'     => $activeStatus,
+        'date_from'  => $activeDateFrom,
+        'date_to'    => $activeDateTo,
+        'project_id' => $activeProject?->id,
+        'q'          => $activeSearch,
+    ]);
+@endphp
+<div class="flex flex-wrap items-center gap-2">
+    <a href="{{ route('vouchers.index', $tabBase) }}"
+       class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition {{ ! $activeApproval ? 'bg-omet-blue text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50' }}">
+        All
+    </a>
+    <a href="{{ route('vouchers.index', $tabBase + ['approval' => 'pending']) }}"
+       class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition {{ $activeApproval === 'pending' ? 'bg-amber-500 text-white shadow-sm' : 'border border-amber-200 bg-white text-amber-700 hover:bg-amber-50' }}">
+        <i data-lucide="clock" class="h-3 w-3"></i> For Approval
+        @if ($approvalCounts['pending'] > 0)
+            <span class="rounded-full px-1.5 text-[10.5px] {{ $activeApproval === 'pending' ? 'bg-white/25' : 'bg-amber-100' }}">{{ $approvalCounts['pending'] }}</span>
+        @endif
+    </a>
+    <a href="{{ route('vouchers.index', $tabBase + ['approval' => 'rejected']) }}"
+       class="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition {{ $activeApproval === 'rejected' ? 'bg-rose-600 text-white shadow-sm' : 'border border-rose-200 bg-white text-rose-600 hover:bg-rose-50' }}">
+        <i data-lucide="rotate-ccw" class="h-3 w-3"></i> Rejected
+        @if ($approvalCounts['rejected'] > 0)
+            <span class="rounded-full px-1.5 text-[10.5px] {{ $activeApproval === 'rejected' ? 'bg-white/25' : 'bg-rose-100' }}">{{ $approvalCounts['rejected'] }}</span>
+        @endif
+    </a>
+    @if ($activeApproval === 'rejected')
+        <span class="text-[11px] text-slate-400">Click <span class="font-semibold text-slate-600">Edit</span> on a rejected voucher to fix and resubmit it — no retyping.</span>
+    @endif
+</div>
+@endif
+
 {{-- ── Toolbar ──────────────────────────────────────────────────────────── --}}
 <div class="disburse-toolbar">
     <form method="GET" action="{{ route('vouchers.index') }}" class="disburse-filter-form w-full" id="filter-form">
@@ -172,6 +212,9 @@ document.addEventListener('alpine:init', () => {
         </div>
         @if ($activeProject)
             <input type="hidden" name="project_id" value="{{ $activeProject->id }}">
+        @endif
+        @if ($activeApproval)
+            <input type="hidden" name="approval" value="{{ $activeApproval }}">
         @endif
 
         {{-- Date from --}}
@@ -213,7 +256,7 @@ document.addEventListener('alpine:init', () => {
         </div>
 
         @if ($activeStatus || $activeSource || $activeDateFrom || $activeDateTo || $activeSearch)
-            <a href="{{ route('vouchers.index', $activeProject ? ['project_id' => $activeProject->id] : []) }}"
+            <a href="{{ route('vouchers.index', array_filter(['project_id' => $activeProject?->id, 'approval' => $activeApproval])) }}"
                class="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700">
                 <i data-lucide="x" class="h-3 w-3"></i> Clear filters
             </a>
