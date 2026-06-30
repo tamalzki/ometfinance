@@ -439,6 +439,30 @@ class VoucherApprovalTest extends TestCase
         $response->assertDontSee('APR-021');
     }
 
+    public function test_index_search_filters_by_unique_voucher_number(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Voucher::create($this->basePayload('2026-0968') + ['approval_status' => 'approved']);
+        Voucher::create($this->basePayload('2026-0999') + ['approval_status' => 'approved']);
+
+        $response = $this->actingAs($admin)->get(route('vouchers.index', ['q' => '2026-0968']));
+
+        $response->assertOk();
+        $response->assertSee('2026-0968');
+        $response->assertDontSee('2026-0999');
+        $response->assertSee('data-result-mode="matching"', false);
+
+        $partial = $this->actingAs($admin)->get(route('vouchers.index', ['q' => '2026-0968']), [
+            'X-Disburse-Partial' => '1',
+        ]);
+
+        $partial->assertOk();
+        $partial->assertSee('id="disburse-list-fragment"', false);
+        $partial->assertSee('2026-0968');
+        $partial->assertDontSee('2026-0999');
+    }
+
     public function test_voucher_show_displays_rejection_reason_to_requester(): void
     {
         $cfo   = User::factory()->create(['role' => 'cfo']);

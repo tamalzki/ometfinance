@@ -30,8 +30,12 @@
 
 <script>
 document.addEventListener('alpine:init', () => {
+    const searchMixin = typeof window.disburseListSearchMixin === 'function'
+        ? window.disburseListSearchMixin()
+        : (typeof window.disburseListSearchFallback === 'function' ? window.disburseListSearchFallback() : {});
+
     Alpine.data('transfersPage', () => ({
-        ...window.disburseListSearchMixin(),
+        ...searchMixin,
         showForm: @json($errors->any()),
         editId: @json(old('editing_transfer_id') ? (int) old('editing_transfer_id') : null),
         accounts: @json($accountsForPicker),

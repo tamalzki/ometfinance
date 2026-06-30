@@ -1,10 +1,11 @@
 import './bootstrap';
 
 import Alpine from 'alpinejs';
-import { disburseListSearchMixin } from './disburse-list-search';
+import { disburseListSearchFallback, disburseListSearchMixin } from './disburse-list-search';
 
 window.Alpine = Alpine;
 window.disburseListSearchMixin = disburseListSearchMixin;
+window.disburseListSearchFallback = disburseListSearchFallback;
 
 const refreshLucideIcons = () => {
     if (typeof window.lucide?.createIcons === 'function') {

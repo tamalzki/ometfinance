@@ -15,8 +15,12 @@
 
 <script>
 document.addEventListener('alpine:init', () => {
+    const searchMixin = typeof window.disburseListSearchMixin === 'function'
+        ? window.disburseListSearchMixin()
+        : (typeof window.disburseListSearchFallback === 'function' ? window.disburseListSearchFallback() : {});
+
     Alpine.data('vouchersPage', () => ({
-        ...window.disburseListSearchMixin(),
+        ...searchMixin,
         showPay: @json($errors->any() && old('paying_voucher_id')),
         activeProjectId: @json($activeProject?->id),
         payVoucher: { id: null, no: '', payee: '', balance: 0 },

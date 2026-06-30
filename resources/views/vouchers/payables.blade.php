@@ -14,8 +14,12 @@
 
 <script>
 document.addEventListener('alpine:init', () => {
+    const searchMixin = typeof window.disburseListSearchMixin === 'function'
+        ? window.disburseListSearchMixin()
+        : (typeof window.disburseListSearchFallback === 'function' ? window.disburseListSearchFallback() : {});
+
     Alpine.data('payablesPage', () => ({
-        ...window.disburseListSearchMixin(),
+        ...searchMixin,
         showPay: @json($errors->any() && ! $errors->has('cancel')),
         payVoucher: { id: null, no: '', payee: '', balance: 0 },
         p: { bank_account_id: '', paid_on: @json(now()->format('Y-m-d')), amount: '', mode: 'cash', check_no: '', check_date: '', notes: '' },

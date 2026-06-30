@@ -1,3 +1,14 @@
+@php
+    $peso = fn ($n) => '₱' . number_format((float) $n, 2);
+    $bucketConfig = [
+        'current'  => ['label' => 'Current',          'dot' => 'bg-emerald-500', 'text' => 'text-emerald-700', 'badge' => 'bg-emerald-50 text-emerald-700 ring-emerald-100'],
+        'd1_30'    => ['label' => '1–30d overdue',    'dot' => 'bg-amber-400',   'text' => 'text-amber-700',   'badge' => 'bg-amber-50 text-amber-800 ring-amber-100'],
+        'd31_60'   => ['label' => '31–60d overdue',   'dot' => 'bg-orange-500',  'text' => 'text-orange-700',  'badge' => 'bg-orange-50 text-orange-700 ring-orange-100'],
+        'd60_plus' => ['label' => '60+ days overdue', 'dot' => 'bg-rose-500',    'text' => 'text-rose-700',    'badge' => 'bg-rose-50 text-rose-700 ring-rose-100'],
+        'pdc'      => ['label' => 'PDC',               'dot' => 'bg-violet-400',  'text' => 'text-violet-700',  'badge' => 'bg-violet-50 text-violet-700 ring-violet-100'],
+        'no_term'  => ['label' => 'No due date',       'dot' => 'bg-slate-300',   'text' => 'text-slate-600',   'badge' => 'bg-slate-100 text-slate-600 ring-slate-200'],
+    ];
+@endphp
 <div id="disburse-list-fragment" class="disburse-data-grid transition-opacity" data-result-count="{{ $rows->total() }}" data-result-mode="{{ $activeSearch ? 'matching' : 'open' }}">
     <table class="min-w-full">
         <thead class="sticky top-0 z-20">

@@ -1,3 +1,15 @@
+@php
+    $peso = fn ($n) => '₱' . number_format((float) $n, 2);
+    $isAccountingUser = auth()->user()->isAccounting();
+    $statusTone = [
+        'draft'     => 'bg-slate-100 text-slate-600 ring-slate-200',
+        'unpaid'    => 'bg-amber-50 text-amber-800 ring-amber-100',
+        'partial'   => 'bg-blue-50 text-blue-700 ring-blue-100',
+        'pdc'       => 'bg-violet-50 text-violet-700 ring-violet-100',
+        'paid'      => 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+        'cancelled' => 'bg-rose-50 text-rose-600 ring-rose-100',
+    ];
+@endphp
 <div id="disburse-list-fragment" class="disburse-data-grid transition-opacity" data-result-count="{{ $vouchers->total() }}" data-result-mode="{{ $activeSearch ? 'matching' : 'shown' }}">
     <table class="min-w-full">
         <thead class="sticky top-0 z-20">
