@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Concerns\AppliesListWildSearch;
 use App\Http\Requests\StoreTransferRequest;
 use App\Http\Requests\UpdateTransferRequest;
 use App\Models\BankAccount;
@@ -10,17 +11,21 @@ use App\Models\Transfer;
 use App\Services\TransferService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\View\View;
 
 class TransferController extends Controller
 {
+    use AppliesListWildSearch;
+
     /**
      * Central intercompany register.
      */
-    public function index(Request $request): View
+    public function index(Request $request): View|Response
     {
         $from = $request->query('from');
         $to   = $request->query('to');
+        $search = $this->normalizeSearch($request->query('q'));
 
         if (! $request->has('from') && ! $request->has('to')) {
             $from = now()->subDays(90)->toDateString();
@@ -39,6 +44,8 @@ class TransferController extends Controller
             $baseQuery->whereDate('date', '<=', $to);
         }
 
+        $this->applyTransferWildSearch($baseQuery, $search);
+
         $summaryRows = (clone $baseQuery)->with(['fromAccount:id,entity_id', 'toAccount:id,entity_id'])
             ->get(['id', 'amount', 'from_account_id', 'to_account_id', 'from_project_id', 'to_project_id']);
 
@@ -52,28 +59,19 @@ class TransferController extends Controller
 
         $transfers = (clone $baseQuery)->paginate(50)->withQueryString();
 
-        $rowSearchIndex = [];
-        foreach ($transfers->getCollection() as $t) {
-            $rowSearchIndex[$t->id] = strtolower(implode(' ', array_filter([
-                $t->fromAccount?->name,
-                $t->fromAccount?->entity?->name,
-                $t->toAccount?->name,
-                $t->toAccount?->entity?->name,
-                $t->fromProject?->name,
-                $t->toProject?->name,
-                $t->purposeLabel(),
-                $t->memo,
-                $t->reason,
-            ])));
-        }
-
         $allAccounts = BankAccount::with('entity')->orderBy('name')->get();
         $projects    = Project::orderBy('kind')->orderBy('name')->get(['id', 'name', 'kind', 'code', 'client_name']);
 
-        return view('transfers.index', compact(
+        $viewData = compact(
             'transfers', 'summary', 'allAccounts', 'projects',
-            'from', 'to', 'rowSearchIndex'
-        ));
+            'from', 'to', 'search'
+        );
+
+        if ($partial = $this->disburseListPartialResponse($request, 'transfers.partials.index-table', $viewData)) {
+            return $partial;
+        }
+
+        return view('transfers.index', $viewData);
     }
 
     public function store(StoreTransferRequest $request): RedirectResponse

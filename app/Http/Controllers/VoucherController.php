@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Concerns\AppliesListWildSearch;
 use App\Models\BankAccount;
 use App\Models\Payee;
 use App\Models\Project;
@@ -15,6 +16,7 @@ use App\Models\VoucherRequest;
 use App\Services\VoucherService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -24,6 +26,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class VoucherController extends Controller
 {
+    use AppliesListWildSearch;
+
     /** Aging bucket labels, shared by the index + payables views. */
     public const AGING_LABELS = [
         'current'  => 'Current',
@@ -36,7 +40,7 @@ class VoucherController extends Controller
 
     /* ── Voucher register ──────────────────────────────────────────────── */
 
-    public function index(Request $request): View
+    public function index(Request $request): View|Response
     {
         $status    = $request->query('status');
         $type      = $request->query('type');
@@ -44,6 +48,7 @@ class VoucherController extends Controller
         $source    = $request->query('source');
         $dateFrom  = $request->query('date_from');
         $dateTo    = $request->query('date_to');
+        $search    = $this->normalizeSearch($request->query('q'));
 
         $query = Voucher::with($this->vouchersListEagerLoad())
             ->orderByDesc('voucher_date')
@@ -77,6 +82,8 @@ class VoucherController extends Controller
             $query->where('project_id', $activeProject->id);
         }
 
+        $this->applyVoucherWildSearch($query, $search);
+
         $vouchers = $query->paginate(50)->withQueryString();
 
         $allQuery = Voucher::with('payments')->where('approval_status', 'approved');
@@ -96,10 +103,9 @@ class VoucherController extends Controller
             'overdue'     => $all->filter->isOverdue()->count(),
         ];
 
-        return view('vouchers.index', [
+        $viewData = [
             'vouchers'        => $vouchers,
             'summary'         => $summary,
-            'rowSearchIndex'  => $this->buildVoucherRowSearchIndex($vouchers->getCollection()),
             'accounts'        => $this->accountsForPicker(),
             'modes'           => Voucher::MODES,
             'statuses'        => Voucher::STATUSES,
@@ -110,8 +116,15 @@ class VoucherController extends Controller
             'activeSource'    => $source,
             'activeDateFrom'  => $dateFrom,
             'activeDateTo'    => $dateTo,
+            'activeSearch'    => $search,
             'activeProject'   => $activeProject,
-        ]);
+        ];
+
+        if ($partial = $this->disburseListPartialResponse($request, 'vouchers.partials.index-table', $viewData)) {
+            return $partial;
+        }
+
+        return view('vouchers.index', $viewData);
     }
 
     /* ── Create form (dedicated page) ─────────────────────────────────── */
@@ -189,9 +202,10 @@ class VoucherController extends Controller
 
     /* ── Payables tab (open items only, with aging) ────────────────────── */
 
-    public function payables(Request $request): View
+    public function payables(Request $request): View|Response
     {
         $bucket = $request->query('bucket');
+        $search = $this->normalizeSearch($request->query('q'));
 
         $openQuery = Voucher::with([
             'project:id,name',
@@ -208,6 +222,8 @@ class VoucherController extends Controller
                 ->where('type', VoucherRequest::TYPE_CREATE)
                 ->where('requested_by', auth()->id()));
         }
+
+        $this->applyVoucherWildSearch($openQuery, $search);
 
         $open = $openQuery->get();
 
@@ -246,16 +262,22 @@ class VoucherController extends Controller
             'count'       => $open->count(),
         ];
 
-        return view('vouchers.payables', [
+        $viewData = [
             'rows'            => $rows,
-            'rowSearchIndex'  => $this->buildPayablesRowSearchIndex($rows->getCollection()),
             'buckets'         => $buckets,
             'agingLabels'     => self::AGING_LABELS,
             'summary'         => $summary,
             'accounts'        => $this->accountsForPicker(),
             'modes'           => Voucher::MODES,
             'activeBucket'    => $bucket,
-        ]);
+            'activeSearch'    => $search,
+        ];
+
+        if ($partial = $this->disburseListPartialResponse($request, 'vouchers.partials.payables-table', $viewData)) {
+            return $partial;
+        }
+
+        return view('vouchers.payables', $viewData);
     }
 
     /* ── CRUD ──────────────────────────────────────────────────────────── */
@@ -896,44 +918,5 @@ class VoucherController extends Controller
             'payments' => fn ($q) => $q->select('id', 'voucher_id', 'amount', 'bank_account_id'),
             'approvalRequests' => fn ($q) => $q->select('id', 'voucher_id', 'type', 'status', 'requested_by', 'review_note'),
         ];
-    }
-
-    /** @param  \Illuminate\Support\Collection<int, Voucher>  $vouchers */
-    private function buildVoucherRowSearchIndex($vouchers): array
-    {
-        $index = [];
-        foreach ($vouchers as $v) {
-            $entryProjects = $v->entries->pluck('project')->filter()->unique('id');
-            $rowProjects = $entryProjects->isNotEmpty() ? $entryProjects : ($v->project ? collect([$v->project]) : collect());
-            $rowCategories = $v->entries->pluck('category')->filter()->unique('id');
-            $index[$v->id] = strtolower(implode(' ', array_filter([
-                $v->voucher_no,
-                $v->payee_name,
-                $rowProjects->pluck('name')->implode(' '),
-                $rowCategories->map(fn ($c) => $c->fullLabel())->implode(' '),
-                $v->typeLabel(),
-                $v->sourceDocumentLabel(),
-                $v->po_number,
-                $v->reference,
-            ])));
-        }
-
-        return $index;
-    }
-
-    /** @param  \Illuminate\Support\Collection<int, Voucher>  $rows */
-    private function buildPayablesRowSearchIndex($rows): array
-    {
-        $index = [];
-        foreach ($rows as $v) {
-            $index[$v->id] = strtolower(implode(' ', array_filter([
-                $v->voucher_no,
-                $v->payee_name,
-                $v->project?->name,
-                $v->typeLabel(),
-            ])));
-        }
-
-        return $index;
     }
 }
