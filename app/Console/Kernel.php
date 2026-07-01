@@ -15,7 +15,21 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule)
     {
-        // $schedule->command('inspire')->hourly();
+        // Daily database backup at 2:00 AM PH time — mysqldump, gzip-compressed,
+        // uploaded to DigitalOcean Spaces. Failure is logged and emailed.
+        $schedule->command('backup:run --only-db')
+                 ->dailyAt('02:00')
+                 ->onFailure(function () {
+                     logger()->error('Daily database backup failed.');
+                 });
+
+        // Prune old backups per the retention policy in config/backup.php.
+        $schedule->command('backup:clean')
+                 ->dailyAt('02:30');
+
+        // Weekly health check — emails if newest backup is stale or storage bloated.
+        $schedule->command('backup:monitor')
+                 ->weeklyOn(1, '08:00');
     }
 
     /**
