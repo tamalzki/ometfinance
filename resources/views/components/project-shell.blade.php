@@ -290,9 +290,10 @@
                     },
                     get totalDeductions() {
                         const a = parseFloat(this.amount) || 0;
-                        const base = this.clientType === 'government' ? a / 1.12 : a;
-                        const rateAmt = base * ((parseFloat(this.vatRate) || 0) + (parseFloat(this.whtRate) || 0) + (parseFloat(this.retentionRate) || 0) + (parseFloat(this.recoupmentRate) || 0)) / 100;
-                        return rateAmt + (parseFloat(this.otherDeductions) || 0);
+                        const vatWhtBase = this.clientType === 'government' ? a / 1.12 : a;
+                        const vatWhtAmt = vatWhtBase * ((parseFloat(this.vatRate) || 0) + (parseFloat(this.whtRate) || 0)) / 100;
+                        const retRecAmt = a * ((parseFloat(this.retentionRate) || 0) + (parseFloat(this.recoupmentRate) || 0)) / 100;
+                        return vatWhtAmt + retRecAmt + (parseFloat(this.otherDeductions) || 0);
                     },
                     get netAmount() {
                         return (parseFloat(this.amount) || 0) - this.totalDeductions;
