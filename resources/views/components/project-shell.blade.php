@@ -288,12 +288,17 @@
                         if (this.transactionType === 'goods') { this.whtRate = 1; this.retentionRate = 1; }
                         else if (this.transactionType === 'services') { this.whtRate = 2; this.retentionRate = 10; }
                     },
+                    roundMoney(value) {
+                        return Math.round((value + Number.EPSILON) * 100) / 100;
+                    },
                     get totalDeductions() {
                         const a = parseFloat(this.amount) || 0;
                         const vatWhtBase = this.clientType === 'government' ? a / 1.12 : a;
-                        const vatWhtAmt = vatWhtBase * ((parseFloat(this.vatRate) || 0) + (parseFloat(this.whtRate) || 0)) / 100;
-                        const retRecAmt = a * ((parseFloat(this.retentionRate) || 0) + (parseFloat(this.recoupmentRate) || 0)) / 100;
-                        return vatWhtAmt + retRecAmt + (parseFloat(this.otherDeductions) || 0);
+                        const vat = this.roundMoney(vatWhtBase * (parseFloat(this.vatRate) || 0) / 100);
+                        const wht = this.roundMoney(vatWhtBase * (parseFloat(this.whtRate) || 0) / 100);
+                        const retention = this.roundMoney(a * (parseFloat(this.retentionRate) || 0) / 100);
+                        const recoupment = this.roundMoney(a * (parseFloat(this.recoupmentRate) || 0) / 100);
+                        return vat + wht + retention + recoupment + (parseFloat(this.otherDeductions) || 0);
                     },
                     get netAmount() {
                         return (parseFloat(this.amount) || 0) - this.totalDeductions;

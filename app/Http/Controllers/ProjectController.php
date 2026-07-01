@@ -376,24 +376,14 @@ class ProjectController extends Controller
         $amount = (float) $data['amount'];
         $isGovernment = ($data['client_type'] ?? '') === 'government';
 
-        // Government: VAT and WHT use VAT-exclusive base (gross ÷ 1.12).
-        // Retention and recoupment apply to the gross amount.
-        // Private: all deductions apply to the gross amount.
-        $vatWhtBase = $isGovernment ? $amount / 1.12 : $amount;
+        $amounts = \App\Support\CollectionDeductionCalculator::amounts(
+            $amount,
+            $isGovernment,
+            $data,
+            (float) ($data['other_deductions_amount'] ?? 0),
+        );
 
-        foreach (['vat', 'wht'] as $deduction) {
-            $rate = (float) ($data["{$deduction}_rate"] ?? 0);
-            $data["{$deduction}_amount"] = round($vatWhtBase * $rate / 100, 2);
-        }
-
-        foreach (['retention', 'recoupment'] as $deduction) {
-            $rate = (float) ($data["{$deduction}_rate"] ?? 0);
-            $data["{$deduction}_amount"] = round($amount * $rate / 100, 2);
-        }
-
-        $data['other_deductions_amount'] = round((float) ($data['other_deductions_amount'] ?? 0), 2);
-
-        return $data;
+        return array_merge($data, $amounts);
     }
 
     /* ── Record funding (borrow / support from another account) ─────────── */

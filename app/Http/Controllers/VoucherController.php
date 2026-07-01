@@ -322,10 +322,14 @@ class VoucherController extends Controller
         $data['approval_status'] = $isAccounting ? 'pending' : 'approved';
         $data['prepared_by'] = auth()->id();
 
-        // Admin/CFO creating directly means there's no separate review step —
-        // they're approving it themselves the moment they hit save.
+        // Admin/CFO creating directly means there's no separate review step.
+        // When the creator is an admin, attribute the approval to the CFO so
+        // the signature block shows the CFO rather than the admin.
         if (! $isAccounting) {
-            $data['approved_by'] = auth()->id();
+            $approver = auth()->user()->isAdmin()
+                ? (\App\Models\User::where('role', 'cfo')->first() ?? auth()->user())
+                : auth()->user();
+            $data['approved_by'] = $approver->id;
             $data['approved_at'] = now();
         }
 

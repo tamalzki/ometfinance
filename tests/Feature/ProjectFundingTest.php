@@ -158,14 +158,15 @@ class ProjectFundingTest extends TestCase
 
         $collection = $project->refresh()->collections->first();
 
-        $this->assertSame(5000.0, (float) $collection->vat_amount);
-        $this->assertSame(2000.0, (float) $collection->wht_amount);
+        // Government: VAT/WHT on gross ÷ 1.12; retention/recoupment on gross.
+        $this->assertSame(4464.29, (float) $collection->vat_amount);
+        $this->assertSame(1785.71, (float) $collection->wht_amount);
         $this->assertSame(10000.0, (float) $collection->retention_amount);
         $this->assertSame(15000.0, (float) $collection->recoupment_amount);
         $this->assertSame(500.0, (float) $collection->other_deductions_amount);
-        $this->assertSame(32500.0, $collection->totalDeductions());
-        $this->assertSame(67500.0, $collection->netAmount());
-        $this->assertSame(67500.0, $project->totalClientCollectedNet());
+        $this->assertSame(31750.0, $collection->totalDeductions());
+        $this->assertSame(68250.0, $collection->netAmount());
+        $this->assertSame(68250.0, $project->totalClientCollectedNet());
     }
 
     public function test_cfo_cannot_record_funding()
