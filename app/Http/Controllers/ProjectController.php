@@ -374,8 +374,14 @@ class ProjectController extends Controller
     private function withComputedDeductions(array $data): array
     {
         $amount = (float) $data['amount'];
+        $isGovernment = ($data['client_type'] ?? '') === 'government';
 
-        foreach (['vat', 'wht', 'retention', 'recoupment'] as $deduction) {
+        // Government advance output VAT: base is VAT-exclusive (gross ÷ 1.12), then × rate.
+        // Private VAT: straight amount × rate.
+        $vatBase = $isGovernment ? $amount / 1.12 : $amount;
+        $data['vat_amount'] = round($vatBase * (float) ($data['vat_rate'] ?? 0) / 100, 2);
+
+        foreach (['wht', 'retention', 'recoupment'] as $deduction) {
             $rate = (float) ($data["{$deduction}_rate"] ?? 0);
             $data["{$deduction}_amount"] = round($amount * $rate / 100, 2);
         }
