@@ -376,14 +376,13 @@ class ProjectController extends Controller
         $amount = (float) $data['amount'];
         $isGovernment = ($data['client_type'] ?? '') === 'government';
 
-        // Government advance output VAT: base is VAT-exclusive (gross ÷ 1.12), then × rate.
-        // Private VAT: straight amount × rate.
-        $vatBase = $isGovernment ? $amount / 1.12 : $amount;
-        $data['vat_amount'] = round($vatBase * (float) ($data['vat_rate'] ?? 0) / 100, 2);
+        // Government: all rate-based deductions apply to the VAT-exclusive base (gross ÷ 1.12).
+        // Private: straight amount × rate.
+        $base = $isGovernment ? $amount / 1.12 : $amount;
 
-        foreach (['wht', 'retention', 'recoupment'] as $deduction) {
+        foreach (['vat', 'wht', 'retention', 'recoupment'] as $deduction) {
             $rate = (float) ($data["{$deduction}_rate"] ?? 0);
-            $data["{$deduction}_amount"] = round($amount * $rate / 100, 2);
+            $data["{$deduction}_amount"] = round($base * $rate / 100, 2);
         }
 
         $data['other_deductions_amount'] = round((float) ($data['other_deductions_amount'] ?? 0), 2);
