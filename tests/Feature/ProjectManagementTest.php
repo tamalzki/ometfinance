@@ -222,4 +222,33 @@ class ProjectManagementTest extends TestCase
         // untagged expense (300) excluded from all buckets
         $this->assertEqualsWithDelta(3500.00, array_sum($buckets),      0.01);
     }
+
+    public function test_allocation_page_shows_per_bucket_running_costs(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/projects', [
+            'name'           => 'Bucket Display Test',
+            'kind'           => 'external',
+            'client_name'    => 'Display Corp',
+            'status'         => 'active',
+            'contract_value' => 500000,
+        ]);
+        $project = \App\Models\Project::where('name', 'Bucket Display Test')->first();
+
+        $sopCat   = \App\Models\ProjectCategory::create(['name' => 'SOP T3', 'running_cost_bucket' => 'sop']);
+        $laborCat = \App\Models\ProjectCategory::create(['name' => 'Labor T3', 'running_cost_bucket' => 'direct_cost']);
+
+        \App\Models\ProjectExpense::create(['project_id' => $project->id, 'category_id' => $sopCat->id,   'amount' => 12000.00, 'spent_on' => now()->toDateString()]);
+        \App\Models\ProjectExpense::create(['project_id' => $project->id, 'category_id' => $laborCat->id, 'amount' => 35000.00, 'spent_on' => now()->toDateString()]);
+
+        $response = $this->actingAs($user)->get("/projects/{$project->id}/allocation");
+
+        $response->assertOk();
+        // Both bucket amounts appear in the table
+        $response->assertSee('12,000.00');
+        $response->assertSee('35,000.00');
+        // Grand total (47,000) appears in the subtotal row
+        $response->assertSee('47,000.00');
+    }
 }

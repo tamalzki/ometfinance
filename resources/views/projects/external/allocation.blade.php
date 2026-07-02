@@ -10,10 +10,6 @@
     $bucketTotalAmt   = $totalCollected * $bucketPercentSum;
     $colCount         = 2 + 2 + $collectionsChrono->count();
 
-    // Actual spend to date — sourced from vouchers via ProjectExpense, but
-    // not yet broken down per allocation bucket (no category↔bucket mapping
-    // exists yet), so we only surface the project-level total here.
-    $runningCost      = $project->totalExpenses();
 @endphp
 
 <x-app-layout :page-title="$project->name">
@@ -67,11 +63,7 @@
                                 <div class="mt-0.5 text-[11px] font-bold normal-case tabular-nums text-omet-navy">₱{{ number_format($totalCollected, 2) }}</div>
                             </th>
                             <th class="sticky left-[21.5rem] z-20 w-[7.5rem] min-w-[7.5rem] border-r border-slate-200 bg-rose-50/40 px-3 py-2.5 text-right text-[11px] font-semibold uppercase tracking-wide text-rose-700">
-                                <div class="inline-flex items-center gap-1">
-                                    Running cost
-                                    
-                                    <i data-lucide="info" class="h-3 w-3 text-rose-500" title="No category tagging yet — every voucher's amount is lumped here as one general total until vouchers can be mapped to a bucket."></i>
-                                </div>
+                                Running cost
                                 <div class="mt-0.5 text-[11px] font-bold normal-case tabular-nums text-rose-600">₱{{ number_format($runningCost, 2) }}</div>
                             </th>
                             @foreach ($collectionsChrono as $idx => $coll)
@@ -120,8 +112,13 @@
                                 <td class="sticky left-[14.5rem] z-10 w-[7rem] min-w-[7rem] px-3 py-2.5 text-right tabular-nums text-[13px] font-semibold {{ $isKpi ? 'bg-amber-50/30 text-amber-700' : 'bg-white text-omet-navy' }}">
                                     ₱{{ number_format($totalCollected * $p, 2) }}
                                 </td>
-                                <td class="sticky left-[21.5rem] z-10 w-[7.5rem] min-w-[7.5rem] border-r border-slate-200 px-3 py-2.5 text-right text-[12px] text-slate-300 {{ $isKpi ? 'bg-amber-50/30' : 'bg-white' }}" title="Not tagged to a bucket yet — see the general total under Running cost.">
-                                    —
+                                @php $bucketKey = $isKpi ? null : ($bucketMap[$line->label] ?? null); @endphp
+                                <td class="sticky left-[21.5rem] z-10 w-[7.5rem] min-w-[7.5rem] border-r border-slate-200 px-3 py-2.5 text-right {{ $isKpi ? 'bg-amber-50/30 text-slate-300 text-[12px]' : 'bg-white font-semibold text-rose-600 text-[13px]' }}">
+                                    @if ($bucketKey)
+                                        ₱{{ number_format($runningCostsByBucket[$bucketKey] ?? 0, 2) }}
+                                    @else
+                                        —
+                                    @endif
                                 </td>
                                 @foreach ($collectionsChrono as $coll)
                                 <td class="px-4 py-2.5 text-right tabular-nums text-[13px] {{ $isKpi ? 'font-semibold text-amber-700' : 'text-slate-700' }}">

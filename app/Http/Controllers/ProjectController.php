@@ -227,6 +227,19 @@ class ProjectController extends Controller
             ->limit(50)
             ->get();
 
+        $runningCostsByBucket = $project->runningCostsByBucket();
+
+        $data['runningCostsByBucket'] = $runningCostsByBucket;
+        $data['runningCost']          = array_sum($runningCostsByBucket);
+        $data['bucketMap'] = [
+            'SOP'          => 'sop',
+            'Direct Costs' => 'direct_cost',
+            'OCM'          => 'ocm',
+            'Commission'   => 'commission',
+            'Capital Cost' => 'capital_cost',
+            'Admin Cost'   => 'admin_cost',
+        ];
+
         return view('projects.external.allocation', $data);
     }
 
