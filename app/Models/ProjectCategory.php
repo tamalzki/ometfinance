@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ProjectCategory extends Model
 {
-    protected $fillable = ['parent_id', 'name'];
+    protected $fillable = ['parent_id', 'name', 'running_cost_bucket'];
 
     public function parent(): BelongsTo
     {

@@ -186,4 +186,40 @@ class ProjectManagementTest extends TestCase
         $response->assertSee('15.00%');
         $response->assertSee('25.00%');
     }
+
+    public function test_running_costs_by_bucket_groups_expenses_correctly(): void
+    {
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post('/projects', [
+            'name'           => 'Bucket Unit Test',
+            'kind'           => 'external',
+            'client_name'    => 'Test Client',
+            'status'         => 'active',
+            'contract_value' => 100000,
+        ]);
+        $project = \App\Models\Project::where('name', 'Bucket Unit Test')->first();
+
+        $sopParent   = \App\Models\ProjectCategory::create(['name' => 'SOP Root T2', 'running_cost_bucket' => 'sop']);
+        $sopChild    = \App\Models\ProjectCategory::create(['name' => 'SOP Sub T2', 'parent_id' => $sopParent->id]);
+        $laborParent = \App\Models\ProjectCategory::create(['name' => 'Labor Root T2', 'running_cost_bucket' => 'direct_cost']);
+        $noTag       = \App\Models\ProjectCategory::create(['name' => 'No Bucket T2']);
+
+        \App\Models\ProjectExpense::create(['project_id' => $project->id, 'category_id' => $sopParent->id, 'amount' => 1000.00, 'spent_on' => now()->toDateString()]);
+        \App\Models\ProjectExpense::create(['project_id' => $project->id, 'category_id' => $sopChild->id,  'amount' => 500.00,  'spent_on' => now()->toDateString()]);
+        \App\Models\ProjectExpense::create(['project_id' => $project->id, 'category_id' => $laborParent->id,'amount' => 2000.00, 'spent_on' => now()->toDateString()]);
+        \App\Models\ProjectExpense::create(['project_id' => $project->id, 'category_id' => $noTag->id,      'amount' => 300.00,  'spent_on' => now()->toDateString()]);
+
+        $project->load('expenses.categoryRef.parent');
+        $buckets = $project->runningCostsByBucket();
+
+        $this->assertEqualsWithDelta(1500.00, $buckets['sop'],          0.01); // parent + child
+        $this->assertEqualsWithDelta(2000.00, $buckets['direct_cost'],  0.01);
+        $this->assertEqualsWithDelta(0.00,    $buckets['ocm'],          0.01);
+        $this->assertEqualsWithDelta(0.00,    $buckets['commission'],   0.01);
+        $this->assertEqualsWithDelta(0.00,    $buckets['capital_cost'], 0.01);
+        $this->assertEqualsWithDelta(0.00,    $buckets['admin_cost'],   0.01);
+        // untagged expense (300) excluded from all buckets
+        $this->assertEqualsWithDelta(3500.00, array_sum($buckets),      0.01);
+    }
 }

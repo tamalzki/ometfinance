@@ -46,6 +46,37 @@ class Project extends Model
         return (float) $this->expenses->sum(fn ($e) => (float) $e->amount);
     }
 
+    public function runningCostsByBucket(): array
+    {
+        $buckets = [
+            'sop'          => 0.0,
+            'direct_cost'  => 0.0,
+            'ocm'          => 0.0,
+            'commission'   => 0.0,
+            'capital_cost' => 0.0,
+            'admin_cost'   => 0.0,
+        ];
+
+        foreach ($this->expenses as $expense) {
+            $amount = (float) $expense->amount;
+            if ($amount <= 0) {
+                continue;
+            }
+
+            $cat = $expense->categoryRef;
+            if (! $cat) {
+                continue;
+            }
+
+            $bucket = $cat->running_cost_bucket ?? $cat->parent?->running_cost_bucket;
+            if ($bucket !== null && array_key_exists($bucket, $buckets)) {
+                $buckets[$bucket] += $amount;
+            }
+        }
+
+        return $buckets;
+    }
+
     /**
      * Cash actually available — client collections net of deductions, plus
      * borrowed/support funds (which carry no deductions), minus expenses.
